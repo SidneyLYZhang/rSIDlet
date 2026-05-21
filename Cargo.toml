@@ -1,0 +1,50 @@
+[package]
+name = "rsidlet"
+description = "A Rust implementation of figlet"
+version = "1.0.0"
+edition = "2024"
+authors = ["Sidney Zhang<zly@lyzhang.me>"]
+license = "MIT"
+readme = "README.md"
+repository = "https://github.com/SidneyLYZhang/rSIDlet"
+keywords = ["figlet", "text", "chinese", "ascii"]
+categories = ["no-std", "command-line-utilities"]
+
+include = [
+    "Cargo.toml",
+    "Cargo.lock",
+    "README.md",
+    "README_en.md",
+    "LICENSE",
+    "src/**",
+    "fonts/**"
+]
+
+[profile.dev]
+opt-level = 1
+overflow-checks = false
+
+[profile.release]
+opt-level = "s"
+lto = "thin"
+codegen-units = 1
+panic = "abort"
+strip = true
+debug = false
+
+[lib]
+name = "rsidlet"
+path = "src/lib.rs"
+test = true
+doc = true
+
+[[bin]]
+name = "sidlet"
+path = "src/main.rs"
+
+[dependencies]
+fontdue = { version = "0.9", default-features = false }
+zip = { version = "8.6.0", default-features = false, features = ["deflate"] }
+clap = { version = "4", features = ["derive"] }
+ureq = { version = "2", features = [] }
+encoding_rs = "0.8"
