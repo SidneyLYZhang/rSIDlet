@@ -1,3 +1,4 @@
+use std::io;
 use std::path::{Path, PathBuf};
 
 /// 获取内置字体目录（编译后可执行文件同级的 ../fonts）
@@ -52,13 +53,7 @@ pub fn extended_font_dir() -> Option<PathBuf> {
     }
     #[cfg(target_os = "windows")]
     {
-        if let Ok(home) = std::env::var("USERPROFILE") {
-            let p = PathBuf::from(home).join("fonts");
-            if p.exists() {
-                return Some(p);
-            }
-        }
-        None
+        home_dir().map(|h| h.join("fonts"))
     }
     #[cfg(not(any(target_os = "linux", target_os = "macos", target_os = "windows")))]
     {
@@ -126,8 +121,8 @@ pub fn system_font_dirs() -> Vec<PathBuf> {
     {
         let windir = std::env::var("WINDIR").unwrap_or_else(|_| "C:\\Windows".to_string());
         dirs.push(PathBuf::from(windir).join("Fonts"));
-        if let Ok(home) = std::env::var("USERPROFILE") {
-            dirs.push(PathBuf::from(home).join("fonts"));
+        if let Some(home) = home_dir() {
+            dirs.push(home.join("fonts"));
         }
     }
 
@@ -256,11 +251,34 @@ fn collect_ttf_files(dir: &Path, files: &mut Vec<String>, max_depth: usize) {
     }
 }
 
+/// 确保扩展字体目录（目录B）存在，不存在时自动创建
+///
+/// - Linux/macOS：返回 figlet 标准目录（优先已存在的）
+/// - Windows：返回 `%USERPROFILE%/fonts`
+///
+/// 目录不存在时自动创建。此目录用于存放下载的字体文件。
+pub fn ensure_extended_font_dir() -> io::Result<PathBuf> {
+    if let Some(dir) = extended_font_dir() {
+        if !dir.exists() {
+            std::fs::create_dir_all(&dir)?;
+        }
+        Ok(dir)
+    } else {
+        Err(io::Error::new(
+            io::ErrorKind::NotFound,
+            "无法确定扩展字体目录（目录B）",
+        ))
+    }
+}
+
 /// 获取用户主目录
 pub fn home_dir() -> Option<PathBuf> {
     #[cfg(target_os = "windows")]
     {
-        std::env::var("USERPROFILE").ok().map(PathBuf::from)
+        std::env::var("USERPROFILE")
+            .or_else(|_| std::env::var("HOME"))
+            .ok()
+            .map(PathBuf::from)
     }
     #[cfg(not(target_os = "windows"))]
     {

@@ -1,0 +1,55 @@
+# Changelog
+
+All notable changes to this project will be documented in this file.
+
+The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
+and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
+
+## [1.0.5] - 2026-05-22
+
+### Added
+
+- 字体下载增加重试机制（默认 3 次，间隔 500ms），提升网络不稳定环境下的安装成功率
+- 扩展字体目录（目录B）支持自动创建，不存在时无需手动创建
+- Windows 平台家目录检测增加 `HOME` 环境变量回退
+- 修复模式（`--test`）增强：自动下载所有必要字体到目录B（big.flf、future.tlf、standard.flf、phm-shinonome.flf、HZK12/14/16）
+- 新增 772 行冒烟测试，覆盖 chilet、figfont、paths、utils 模块的关键功能
+
+### Changed
+
+- Windows 平台扩展字体目录（`%USERPROFILE%/fonts`）不再检查目录是否存在，改为由自动创建逻辑统一处理
+- 测试安装状态（`--test`）的目录显示标签优化为"目录A（内置）"和"目录B（扩展）"
+- README 中英文文档增加 `cargo install` 后需运行 `sidlet --test` 修复字体的说明
+
+### Fixed
+
+- 清理 install.rs 中残留的注释代码
+- 修复 paths.rs 中 `home_dir()` 与 `extended_font_dir()` 的逻辑一致性问题
+
+## [1.0.0] - 2026-05-21
+
+### Added
+
+- 首个正式版本发布
+- **核心功能**：figlet/toilet 风格的 ASCII 艺术字渲染引擎
+- **中文支持**：通过 HZK 点阵字库（12/14/16px）和矢量字体（TTF/OTF）两种方式渲染中文
+- **颜色滤镜**：支持 rainbow（逐字符/逐行彩虹）、metal（金属）、fire（火焰）、water（水色）、random（随机）及 8 种纯色
+- **字体管理**：
+  - `--install`：在线安装 figlet/toilet 字体
+  - `--info` / `-i`：查看字体头部信息
+  - `--list font|colormap|installed|letters`：列出资源
+  - `--test`：检查并修复字体目录安装状态
+- **在线字体下载**：从 xero/figlet-fonts、PhMajerus/FIGfonts、aguegu/BitmapFont 三个 GitHub 仓库下载字体
+- **命令行选项**：
+  - `-f` / `--font`：指定字体
+  - `-w` / `--width`：最大输出宽度，超宽自动换行
+  - `-m` / `--maskcolor`：颜色遮蔽
+  - `-s` / `--size`：点阵字体大小
+  - `--fore` / `--back`：自定义前景/背景字符
+  - `-C` / `--control`：figlet control 文件
+  - `-d` / `--directory`：额外字体搜索目录
+- **figlet control 文件支持**：支持 `.flc` 格式的布局控制文件
+- **Rust 库函数**：提供 `figfont`、`chilet`、`utils` 等公共模块，方便集成到其他 Rust 项目
+- **跨平台**：支持 Windows（x64）、macOS（universal）、Ubuntu Linux（x64）、Arch Linux（x64）
+- **内置字体**：standard.flf、big.flf、phm-shinonome.flf、future.tlf、HZK12、HZK14、HZK16
+- **发布到 crates.io**：可通过 `cargo install rsidlet` 安装

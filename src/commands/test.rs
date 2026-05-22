@@ -7,9 +7,9 @@ use crate::utils;
 
 /// 执行 `--test` 命令
 ///
-/// 1. 检查内置字体目录是否存在
-/// 2. 问用户是否需要修复
-/// 3. 若一切就绪，用 rainbow 模式输出 "It's ready"
+/// 1. 检查字体目录（目录A 和 目录B）是否存在
+/// 2. 若有目录缺失，询问用户是否修复
+/// 3. 修复完成后（或一切就绪），用 rainbow 模式输出 "It's ready"
 pub fn run() -> io::Result<()> {
     let builtin = paths::builtin_font_dir();
     let extended = paths::extended_font_dir();
@@ -19,20 +19,16 @@ pub fn run() -> io::Result<()> {
 
     if !builtin_ok || !extended_ok {
         println!("字体目录检查：");
-        if let Some(ref p) = builtin {
-            println!(
-                "  内置字体目录: {} [{}]",
-                p.display(),
-                if builtin_ok { "存在" } else { "不存在" }
-            );
-        }
-        if let Some(ref p) = extended {
-            println!(
-                "  扩展字体目录: {} [{}]",
-                p.display(),
-                if extended_ok { "存在" } else { "不存在" }
-            );
-        }
+        println!(
+            "  目录A (内置): {} [{}]",
+            builtin.as_ref().map(|p| p.display().to_string()).unwrap_or_else(|| "未找到".to_string()),
+            if builtin_ok { "存在" } else { "不存在" }
+        );
+        println!(
+            "  目录B (扩展): {} [{}]",
+            extended.as_ref().map(|p| p.display().to_string()).unwrap_or_else(|| "未找到".to_string()),
+            if extended_ok { "存在" } else { "不存在" }
+        );
 
         println!();
         print!("是否需要修复安装？（y/n）：");
@@ -50,7 +46,6 @@ pub fn run() -> io::Result<()> {
         }
     }
 
-    // 加载 standard 字体并输出
     let font = load_standard_font()?;
     let lines = font.render("It's ready");
     utils::print_colored(&lines, utils::ColorFilter::Rainbow);
@@ -58,33 +53,47 @@ pub fn run() -> io::Result<()> {
     Ok(())
 }
 
-/// 修复安装：检查并恢复字体目录
+/// 修复安装：
+/// 1. 确保目录B存在（不存在时自动创建；目录A 仅检查不创建）
+/// 2. 检查并下载缺失的必要字体文件到目录B
 fn repair_installation() -> io::Result<()> {
-    // 检查内置字体目录
-    let builtin = paths::builtin_font_dir();
-    if let Some(ref dir) = builtin {
-        if !dir.exists() {
-            println!("内置字体目录 {} 不存在，无法自动修复。", dir.display());
-            println!("请确保 fonts/ 目录与可执行文件在正确的位置。");
-            return Err(io::Error::new(
-                io::ErrorKind::NotFound,
-                "内置字体目录不存在",
-            ));
+    // Step 1: 确保目录B存在
+    let dest_dir = paths::ensure_extended_font_dir()?;
+    println!("目录B (扩展) 已就绪: {}", dest_dir.display());
+
+    // Step 2: 检查并下载缺失的必要字体文件
+    let search_dirs = paths::font_search_paths(None);
+
+    // FIGlet/TOIlet 字体：来自 xero/figlet-fonts 和 PhMajerus/FIGfonts
+    let required_flf = [
+        ("big.flf", "big.flf"),
+        ("future.tlf", "future.tlf"),
+        ("standard.flf", "standard.flf"),
+        ("phm-shinonome.flf", "phm-shinonome.flf"),
+    ];
+
+    for (filename, search_name) in &required_flf {
+        if paths::find_font_file(search_name, &search_dirs).is_some() {
+            continue;
+        }
+        println!("正在下载 {} ...", filename);
+        match download::download_font(filename, &dest_dir) {
+            Ok(result) => println!("  已下载: {}", result.file_path.display()),
+            Err(e) => eprintln!("  下载 {} 失败: {}", filename, e),
         }
     }
 
-    // 检查 standard.flf 是否存在
-    if let Some(ref dir) = builtin {
-        let standard = dir.join("standard.flf");
-        if !standard.exists() {
-            println!("standard.flf 不存在，正在下载...");
-            match download::download_font("standard.flf", dir) {
-                Ok(result) => println!("已下载 standard.flf 到 {}", result.file_path.display()),
-                Err(e) => {
-                    eprintln!("下载失败: {}", e);
-                    return Err(e);
-                }
-            }
+    // HZK 中文字库：来自 aguegu/BitmapFont
+    let required_hzk = ["HZK12", "HZK14", "HZK16"];
+
+    for hzk in &required_hzk {
+        if hzk_exists_in_dirs(hzk, &search_dirs) {
+            continue;
+        }
+        println!("正在下载 {} ...", hzk);
+        match download::download_file(hzk, &dest_dir) {
+            Ok(result) => println!("  已下载: {}", result.file_path.display()),
+            Err(e) => eprintln!("  下载 {} 失败: {}", hzk, e),
         }
     }
 
@@ -92,12 +101,21 @@ fn repair_installation() -> io::Result<()> {
     Ok(())
 }
 
+/// 检查 HZK 文件是否在任一搜索目录中存在
+fn hzk_exists_in_dirs(name: &str, dirs: &[std::path::PathBuf]) -> bool {
+    for dir in dirs {
+        if dir.join(name).exists() {
+            return true;
+        }
+    }
+    false
+}
+
 fn load_standard_font() -> io::Result<FigletFont> {
     let dirs = paths::font_search_paths(None);
     if let Some(path) = paths::find_font_file("standard", &dirs) {
         FigletFont::load(&path)
     } else {
-        // 使用内置字体作为后备
         Ok(FigletFont::builtin())
     }
 }

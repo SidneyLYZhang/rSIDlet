@@ -20,18 +20,11 @@ pub fn run(font_name: Option<&str>, extra_dir: Option<&Path>) -> io::Result<()> 
         return Ok(());
     }
 
-    // 确定目标安装目录
+    // 确定目标安装目录（用户指定目录 或 目录B）
     let dest_dir = if let Some(dir) = extra_dir {
         dir.to_path_buf()
-    } else if let Some(ext) = paths::extended_font_dir() {
-        ext
-    } else if let Some(builtin) = paths::builtin_font_dir() {
-        builtin
     } else {
-        return Err(io::Error::new(
-            io::ErrorKind::NotFound,
-            "没有可用的字体安装目录",
-        ));
+        paths::ensure_extended_font_dir()?
     };
 
     println!("正在下载字体: {} ...", name);

@@ -15,7 +15,16 @@ const FONT_REPOS: &[FontRepo] = &[
         branch: "main",
         subdir: "fonts",
     },
+    FontRepo {
+        owner: "aguegu",
+        repo: "BitmapFont",
+        branch: "master",
+        subdir: "font",
+    },
 ];
+
+/// 默认下载重试次数
+const MAX_RETRIES: u32 = 3;
 
 struct FontRepo {
     owner: &'static str,
@@ -31,26 +40,18 @@ pub struct DownloadResult {
     pub source_url: String,
 }
 
-/// 从 GitHub 仓库下载字体文件到目标目录
+/// 从 GitHub 仓库下载字体文件到目标目录（支持重试）
 ///
-/// 依次尝试两个 GitHub 仓库，找到后下载到 `dest_dir`。
+/// 依次尝试所有 GitHub 仓库，找到后下载到 `dest_dir`。
+/// 自动补全 .flf/.tlf 扩展名。
 pub fn download_font(name: &str, dest_dir: &Path) -> io::Result<DownloadResult> {
-    // 确保字体名有扩展名
     let candidates = resolve_candidates(name);
 
     for repo in FONT_REPOS {
         for candidate in &candidates {
-            let url = format!(
-                "https://raw.githubusercontent.com/{}/{}/{}/{}",
-                repo.owner, repo.repo, repo.branch,
-                if repo.subdir.is_empty() {
-                    candidate.to_string()
-                } else {
-                    format!("{}/{}", repo.subdir, candidate)
-                }
-            );
+            let url = build_raw_url(repo, candidate);
 
-            match try_download(&url, candidate, dest_dir) {
+            match try_download_with_retry(&url, candidate, dest_dir, MAX_RETRIES) {
                 Ok(result) => return Ok(result),
                 Err(_) => continue,
             }
@@ -63,23 +64,35 @@ pub fn download_font(name: &str, dest_dir: &Path) -> io::Result<DownloadResult> 
     ))
 }
 
-/// 下载字体文件的原始数据
+/// 以精确文件名从 GitHub 仓库下载文件到目标目录（支持重试）
+///
+/// 不自动补全扩展名，适用于 HZK 等无扩展名的文件。
+/// 依次尝试所有 GitHub 仓库。
+pub fn download_file(name: &str, dest_dir: &Path) -> io::Result<DownloadResult> {
+    for repo in FONT_REPOS {
+        let url = build_raw_url(repo, name);
+
+        match try_download_with_retry(&url, name, dest_dir, MAX_RETRIES) {
+            Ok(result) => return Ok(result),
+            Err(_) => continue,
+        }
+    }
+
+    Err(io::Error::new(
+        io::ErrorKind::NotFound,
+        format!("无法从任何 GitHub 仓库下载文件: {}", name),
+    ))
+}
+
+/// 下载字体文件的原始数据（支持重试）
 pub fn download_font_data(name: &str) -> io::Result<(Vec<u8>, String)> {
     let candidates = resolve_candidates(name);
 
     for repo in FONT_REPOS {
         for candidate in &candidates {
-            let url = format!(
-                "https://raw.githubusercontent.com/{}/{}/{}/{}",
-                repo.owner, repo.repo, repo.branch,
-                if repo.subdir.is_empty() {
-                    candidate.to_string()
-                } else {
-                    format!("{}/{}", repo.subdir, candidate)
-                }
-            );
+            let url = build_raw_url(repo, candidate);
 
-            match try_download_data(&url) {
+            match try_download_data_with_retry(&url, MAX_RETRIES) {
                 Ok(data) => return Ok((data, candidate.clone())),
                 Err(_) => continue,
             }
@@ -130,6 +143,64 @@ pub fn list_available_online() -> io::Result<Vec<String>> {
 
     all_files.sort();
     Ok(all_files)
+}
+
+/// 根据仓库配置和文件名构建 raw.githubusercontent.com 直链 URL
+fn build_raw_url(repo: &FontRepo, filename: &str) -> String {
+    if repo.subdir.is_empty() {
+        format!(
+            "https://raw.githubusercontent.com/{}/{}/{}/{}",
+            repo.owner, repo.repo, repo.branch, filename
+        )
+    } else {
+        format!(
+            "https://raw.githubusercontent.com/{}/{}/{}/{}/{}",
+            repo.owner, repo.repo, repo.branch, repo.subdir, filename
+        )
+    }
+}
+
+/// 带重试的下载：尝试从 URL 下载文件并保存到目标目录
+fn try_download_with_retry(
+    url: &str,
+    filename: &str,
+    dest_dir: &Path,
+    max_retries: u32,
+) -> io::Result<DownloadResult> {
+    let mut last_err = None;
+    for attempt in 0..max_retries {
+        match try_download(url, filename, dest_dir) {
+            Ok(result) => return Ok(result),
+            Err(e) => {
+                last_err = Some(e);
+                if attempt < max_retries - 1 {
+                    std::thread::sleep(std::time::Duration::from_millis(500));
+                }
+            }
+        }
+    }
+    Err(last_err.unwrap_or_else(|| {
+        io::Error::other("下载失败：已达最大重试次数")
+    }))
+}
+
+/// 带重试的数据下载：尝试从 URL 下载数据
+fn try_download_data_with_retry(url: &str, max_retries: u32) -> io::Result<Vec<u8>> {
+    let mut last_err = None;
+    for attempt in 0..max_retries {
+        match try_download_data(url) {
+            Ok(data) => return Ok(data),
+            Err(e) => {
+                last_err = Some(e);
+                if attempt < max_retries - 1 {
+                    std::thread::sleep(std::time::Duration::from_millis(500));
+                }
+            }
+        }
+    }
+    Err(last_err.unwrap_or_else(|| {
+        io::Error::other("下载失败：已达最大重试次数")
+    }))
 }
 
 /// 尝试从 URL 下载并保存到目标目录

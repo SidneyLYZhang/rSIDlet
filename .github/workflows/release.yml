@@ -1,0 +1,101 @@
+name: Release
+
+on:
+  push:
+    tags:
+      - "v*"
+
+jobs:
+  build:
+    name: Build (${{ matrix.target }})
+    runs-on: ${{ matrix.os }}
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - os: windows-latest
+            target: win64
+            ext: zip
+            binary: sidlet.exe
+          - os: macos-latest
+            target: macos
+            ext: tar.xz
+            binary: sidlet
+          - os: ubuntu-latest
+            target: ubuntu
+            ext: tar.xz
+            binary: sidlet
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: dtolnay/rust-toolchain@stable
+
+      - name: Extract version
+        run: echo "VERSION=${GITHUB_REF_NAME#v}" >> $GITHUB_ENV
+
+      - name: Build release
+        run: cargo build --release
+
+      - name: Package (Windows)
+        if: runner.os == 'Windows'
+        shell: pwsh
+        run: |
+          $archive = "rsidlet-$env:VERSION-${{ matrix.target }}.${{ matrix.ext }}"
+          Copy-Item target/release/${{ matrix.binary }} ${{ matrix.binary }}
+          Compress-Archive -Path ${{ matrix.binary }}, fonts -DestinationPath $archive
+          echo "ARCHIVE=$archive" >> $env:GITHUB_ENV
+
+      - name: Package (Unix)
+        if: runner.os != 'Windows'
+        run: |
+          ARCHIVE="rsidlet-${VERSION}-${{ matrix.target }}.${{ matrix.ext }}"
+          cp "target/release/${{ matrix.binary }}" "${{ matrix.binary }}"
+          tar -cJf "${ARCHIVE}" "${{ matrix.binary }}" fonts/
+          echo "ARCHIVE=${ARCHIVE}" >> $GITHUB_ENV
+
+      - name: Upload to Release
+        uses: softprops/action-gh-release@v2
+        with:
+          files: ${{ env.ARCHIVE }}
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Publish to crates.io
+        if: matrix.target == 'ubuntu'
+        run: cargo publish
+        env:
+          CARGO_REGISTRY_TOKEN: ${{ secrets.CARGO_REGISTRY_TOKEN }}
+
+  build-archlinux:
+    name: Build (archlinux)
+    runs-on: ubuntu-latest
+    container:
+      image: archlinux:latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install system dependencies
+        run: |
+          pacman -Sy --noconfirm archlinux-keyring
+          pacman -Su --noconfirm
+          pacman -S --noconfirm rust gcc
+
+      - name: Extract version
+        run: echo "VERSION=${GITHUB_REF_NAME#v}" >> $GITHUB_ENV
+
+      - name: Build release
+        run: cargo build --release
+
+      - name: Package
+        run: |
+          ARCHIVE="rsidlet-${VERSION}-archlinux.tar.xz"
+          cp target/release/sidlet sidlet
+          tar -cJf "${ARCHIVE}" sidlet fonts/
+          echo "ARCHIVE=${ARCHIVE}" >> $GITHUB_ENV
+
+      - name: Upload to Release
+        uses: softprops/action-gh-release@v2
+        with:
+          files: ${{ env.ARCHIVE }}
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}

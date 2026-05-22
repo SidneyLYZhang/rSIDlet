@@ -14,6 +14,12 @@
 cargo install rsidlet
 ```
 
+由于cargo只能编译二进制文件，所以编译完成可能会缺失字体文件，需要使用命令自带 `--test` 功能进行修复。
+
+```bash
+sidlet --test
+```
+
 ### 库函数
 
 ```bash

@@ -14,6 +14,12 @@ This project provides both a CLI tool (`sidlet`) and a Rust library for integrat
 cargo install rsidlet
 ```
 
+Since cargo only compiles binary files, the compiled binary may be missing font files. To fix this, use the `--test` flag.
+
+```bash
+sidlet --test to repair
+```
+
 ### Library
 
 ```bash
