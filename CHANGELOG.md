@@ -5,6 +5,19 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [1.0.6] - 2026-05-22
+
+### Changed
+
+- Linux 扩展字体目录（目录B）从系统路径（`/usr/share/figlet`、`/usr/local/share/figlet`）改为用户可写路径（`$XDG_DATA_HOME/figlet` 或 `~/.local/share/figlet`）
+- macOS 扩展字体目录（目录B）从系统路径改为 `~/Library/Application Support/figlet`
+- 字体搜索路径新增系统级 figlet 目录（`/usr/share/figlet`、`/usr/local/share/figlet`）作为只读的第三优先级搜索源
+- CI 发布流程优化：`cargo publish` 从 ubuntu 构建 job 中拆分为独立的 `publish` job，依赖 `build` job 全部完成后执行
+
+### Fixed
+
+- CI release workflow 增加 `permissions: contents: write`，修复 GitHub Release 上传权限问题
+
 ## [1.0.5] - 2026-05-22
 
 ### Added

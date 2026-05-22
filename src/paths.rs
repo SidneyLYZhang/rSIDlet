@@ -33,23 +33,25 @@ pub fn builtin_font_dir() -> Option<PathBuf> {
     None
 }
 
-/// 获取扩展系统字体目录（figlet 标准目录）
+/// 获取扩展字体目录（用户可写，用于下载和安装字体）
 ///
-/// - Linux/macOS: `/usr/share/figlet`、`/usr/local/share/figlet`
+/// - Linux: `$XDG_DATA_HOME/figlet` 或 `~/.local/share/figlet`
+/// - macOS: `~/Library/Application Support/figlet`
 /// - Windows: `%USERPROFILE%\fonts`
 pub fn extended_font_dir() -> Option<PathBuf> {
-    #[cfg(any(target_os = "linux", target_os = "macos"))]
+    #[cfg(target_os = "linux")]
     {
-        let candidates = [
-            PathBuf::from("/usr/share/figlet"),
-            PathBuf::from("/usr/local/share/figlet"),
-        ];
-        for p in &candidates {
-            if p.exists() {
-                return Some(p.clone());
+        home_dir().map(|h| {
+            if let Ok(xdg) = std::env::var("XDG_DATA_HOME") {
+                PathBuf::from(xdg).join("figlet")
+            } else {
+                h.join(".local").join("share").join("figlet")
             }
-        }
-        candidates.first().cloned()
+        })
+    }
+    #[cfg(target_os = "macos")]
+    {
+        home_dir().map(|h| h.join("Library").join("Application Support").join("figlet"))
     }
     #[cfg(target_os = "windows")]
     {
@@ -61,12 +63,28 @@ pub fn extended_font_dir() -> Option<PathBuf> {
     }
 }
 
+/// 获取系统级 figlet 字体目录（只读，由包管理器安装字体时使用）
+fn system_figlet_dirs() -> Vec<PathBuf> {
+    #[cfg(any(target_os = "linux", target_os = "macos"))]
+    {
+        vec![
+            PathBuf::from("/usr/share/figlet"),
+            PathBuf::from("/usr/local/share/figlet"),
+        ]
+    }
+    #[cfg(not(any(target_os = "linux", target_os = "macos")))]
+    {
+        Vec::new()
+    }
+}
+
 /// 获取所有字体搜索路径（按优先级排序）
 ///
 /// 返回顺序：
 /// 1. 内置 ../fonts 目录
-/// 2. 扩展系统目录
-/// 3. 用户指定目录（通过 `-d` 参数传入）
+/// 2. 扩展字体目录（用户可写）
+/// 3. 系统 figlet 目录（如 /usr/share/figlet，只读）
+/// 4. 用户指定目录（通过 `-d` 参数传入）
 pub fn font_search_paths(extra_dir: Option<&Path>) -> Vec<PathBuf> {
     let mut paths: Vec<PathBuf> = Vec::new();
 
@@ -77,6 +95,13 @@ pub fn font_search_paths(extra_dir: Option<&Path>) -> Vec<PathBuf> {
     if let Some(ext) = extended_font_dir() {
         if !paths.contains(&ext) {
             paths.push(ext);
+        }
+    }
+
+    // 系统级 figlet 目录（只读，由包管理器安装字体时使用）
+    for sys_dir in system_figlet_dirs() {
+        if sys_dir.exists() && !paths.contains(&sys_dir) {
+            paths.push(sys_dir);
         }
     }
 
