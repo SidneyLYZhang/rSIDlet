@@ -2,3 +2,7 @@
 
 CLAUDE.md
 .claude/
+# Added by goreleaser init:
+dist/
+.intentionally-empty-file.o
+target/
