@@ -5,11 +5,23 @@ use crate::figfont::{FigFont, FigletFont};
 use crate::paths;
 use crate::utils;
 
+/// 基础字体文件列表
+const BASE_FONTS: &[&str] = &[
+    "big.flf",
+    "future.tlf",
+    "HZK12",
+    "HZK14",
+    "HZK16",
+    "phm-shinonome.flf",
+    "standard.flf",
+];
+
 /// 执行 `--test` 命令
 ///
-/// 1. 检查字体目录（目录A 和 目录B）是否存在
-/// 2. 若有目录缺失，询问用户是否修复
-/// 3. 修复完成后（或一切就绪），用 rainbow 模式输出 "It's ready"
+/// 1. 检查基础字体文件是否存在
+/// 2. 检查字体目录（目录A 和 目录B）是否存在
+/// 3. 若有缺失，询问用户是否修复
+/// 4. 修复完成后（或一切就绪），用 rainbow 模式输出 "It's ready"
 pub fn run() -> io::Result<()> {
     let builtin = paths::builtin_font_dir();
     let extended = paths::extended_font_dir();
@@ -17,7 +29,7 @@ pub fn run() -> io::Result<()> {
     let builtin_ok = builtin.as_ref().map(|p| p.exists()).unwrap_or(false);
     let extended_ok = extended.as_ref().map(|p| p.exists()).unwrap_or(false);
 
-    if !builtin_ok || !extended_ok {
+    if !all_base_fonts_exist() || !builtin_ok || !extended_ok {
         println!("字体目录检查：");
         println!(
             "  目录A (内置): {} [{}]",
@@ -51,6 +63,12 @@ pub fn run() -> io::Result<()> {
     utils::print_colored(&lines, utils::ColorFilter::Rainbow);
 
     Ok(())
+}
+
+/// 检查所有基础字体文件是否存在于搜索目录中
+fn all_base_fonts_exist() -> bool {
+    let dirs = paths::font_search_paths(None);
+    BASE_FONTS.iter().all(|name| dirs.iter().any(|d| d.join(name).exists()))
 }
 
 /// 修复安装：

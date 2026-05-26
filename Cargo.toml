@@ -46,5 +46,5 @@ path = "src/main.rs"
 fontdue = { version = "0.9", default-features = false }
 zip = { version = "8.6.0", default-features = false, features = ["deflate"] }
 clap = { version = "4", features = ["derive"] }
-ureq = { version = "2", features = [] }
+ureq = { version = "2", features = ["proxy-from-env"] }
 encoding_rs = "0.8"

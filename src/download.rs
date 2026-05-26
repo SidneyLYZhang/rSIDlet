@@ -1,5 +1,9 @@
 use std::io;
 use std::path::{Path, PathBuf};
+use std::sync::LazyLock;
+
+/// 懒加载的 HTTP Agent，自动从 HTTP_PROXY/HTTPS_PROXY/NO_PROXY 环境变量读取代理设置
+static AGENT: LazyLock<ureq::Agent> = LazyLock::new(|| ureq::AgentBuilder::new().build());
 
 /// GitHub 字体仓库配置
 const FONT_REPOS: &[FontRepo] = &[
@@ -219,7 +223,7 @@ fn try_download(url: &str, filename: &str, dest_dir: &Path) -> io::Result<Downlo
 
 /// 尝试从 URL 下载数据
 fn try_download_data(url: &str) -> io::Result<Vec<u8>> {
-    let resp = ureq::get(url)
+    let resp = AGENT.get(url)
         .set("User-Agent", "rsidlet/0.1.0")
         .call()
         .map_err(|e| {
@@ -233,7 +237,7 @@ fn try_download_data(url: &str) -> io::Result<Vec<u8>> {
 
 /// 获取 GitHub 仓库目录中的文件列表
 fn fetch_repo_file_list(api_url: &str) -> io::Result<Vec<String>> {
-    let resp = ureq::get(api_url)
+    let resp = AGENT.get(api_url)
         .set("User-Agent", "rsidlet/0.1.0")
         .set("Accept", "application/vnd.github.v3+json")
         .call()
