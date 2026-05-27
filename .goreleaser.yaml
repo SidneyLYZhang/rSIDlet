@@ -21,6 +21,7 @@ before:
 builds:
   - builder: rust
     tool: cargo-zigbuild
+    binary: sidlet
     flags:
       - --release
     targets:

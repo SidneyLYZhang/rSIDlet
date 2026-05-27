@@ -36,41 +36,6 @@ jobs:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           # GoReleaser 使用此 token 创建 Release 并上传所有产物
 
-  # Arch Linux 原生构建（在 Arch 容器内编译，确保 ABI 兼容性）
-  build-archlinux:
-    name: Build (archlinux)
-    runs-on: ubuntu-latest
-    container:
-      image: archlinux:latest
-    steps:
-      - uses: actions/checkout@v4
-
-      - name: Install system dependencies
-        run: |
-          pacman -Sy --noconfirm archlinux-keyring
-          pacman -Su --noconfirm
-          pacman -S --noconfirm rust gcc
-
-      - name: Extract version
-        run: echo "VERSION=${GITHUB_REF_NAME#v}" >> $GITHUB_ENV
-
-      - name: Build release
-        run: cargo build --release
-
-      - name: Package
-        run: |
-          ARCHIVE="rsidlet-${VERSION}-archlinux.tar.xz"
-          cp target/release/sidlet sidlet
-          tar -cJf "${ARCHIVE}" sidlet fonts/
-          echo "ARCHIVE=${ARCHIVE}" >> $GITHUB_ENV
-
-      - name: Upload to Release
-        uses: softprops/action-gh-release@v2
-        with:
-          files: ${{ env.ARCHIVE }}
-        env:
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-
   # 在 GoReleaser 构建成功后再发布到 crates.io
   publish:
     name: Publish to crates.io
