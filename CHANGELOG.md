@@ -5,6 +5,23 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [1.1.0] - 2026-05-27
+
+### Added
+
+- GoReleaser 配置（`.goreleaser.yaml`），使用 `cargo-zigbuild` 实现跨平台交叉编译（Linux x86_64/musl、macOS x86_64/aarch64、Windows x64）
+- 跨平台 Makefile，提供 `build` / `test` / `lint` / `run` / `doc` / `package` / `install` / `uninstall` / `clean` 等统一构建目标
+- 一键安装脚本：`install.sh`（Linux/macOS）和 `install.ps1`（Windows），自动检测平台、下载对应版本的二进制文件并安装
+- CI Release 工作流新增 Arch Linux 原生构建 job（在 Arch 容器内编译），确保 ABI 兼容性
+- 字体下载新增 HTTP 代理支持：`ureq` 启用 `proxy-from-env` feature，自动从 `HTTP_PROXY` / `HTTPS_PROXY` / `NO_PROXY` 环境变量读取代理配置
+- 下载模块使用全局懒加载 `ureq::Agent` 统一管理 HTTP 连接复用与代理设置
+
+### Changed
+
+- CI Release 工作流重构：改用 GoReleaser 统一管理跨平台构建、打包和 GitHub Release 发布
+- `--test` 命令增强：在检查字体目录存在性的基础上，新增基础字体文件（big.flf、future.tlf、standard.flf、phm-shinonome.flf、HZK12/14/16）完整性校验
+- 文档版本号更新为 `v1.1.0+`
+
 ## [1.0.6] - 2026-05-22
 
 ### Changed

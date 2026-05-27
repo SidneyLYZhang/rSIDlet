@@ -145,44 +145,34 @@ fn draw(message: &str, cli: &Cli) -> io::Result<()> {
 }
 
 /// Chilet 模式渲染（中文/矢量字体）
+///
+/// 使用 chilet 模块的统一渲染入口，自动选择 HZK 点阵字库或系统字体遮蔽方案。
 fn render_chilet(
     message: &str,
     font_name: &str,
-    dirs: &[PathBuf],
+    _dirs: &[PathBuf],
     cli: &Cli,
 ) -> io::Result<Vec<String>> {
+    let fg = cli.foreground.chars().next().unwrap_or('█');
+    let bg = cli.background.chars().next().unwrap_or(' ');
+
     let font_lower = font_name.to_lowercase();
-    let is_vector = font_lower.ends_with(".ttf") || font_lower.ends_with(".otf");
+    let is_system_font = font_lower.ends_with(".ttf")
+        || font_lower.ends_with(".otf")
+        || font_lower.ends_with(".ttc");
+    let is_hzk = font_lower.starts_with("hzk");
 
-    if is_vector {
-        // 使用矢量字体渲染
-        let font_path = paths::find_font_file(font_name, dirs).ok_or_else(|| {
-            io::Error::new(io::ErrorKind::NotFound, format!("未找到矢量字体: {}", font_name))
-        })?;
+    // 构建渲染选项
+    let mut options = rsidlet::chilet::RenderOptions::default()
+        .with_size(cli.font_size as u32)
+        .chars(fg, bg);
 
-        let lines = rsidlet::chilet::render_with_font_file(message, &font_path, cli.font_size)
-            .map_err(|e| io::Error::new(io::ErrorKind::Other, e.to_string()))?;
-
-        return Ok(apply_charset(lines, &cli.foreground, &cli.background));
+    if is_system_font || is_hzk {
+        options = options.font(font_name);
     }
 
-    // 使用 HZK 点阵字体渲染中文
-    let hzk_size = cli.font_size as u32;
-    let hzk_name = match hzk_size {
-        14 => "HZK14",
-        16 => "HZK16",
-        _ => "HZK12",
-    };
-
-    let hzk_path = rsidlet::chilet::find_hzk(hzk_name).ok_or_else(|| {
-        io::Error::new(
-            io::ErrorKind::NotFound,
-            format!("未找到 HZK 中文字库: {}（字体目录可能不完整）", hzk_name),
-        )
-    })?;
-
-    let lines = rsidlet::chilet::render_hzk(message, &hzk_path)?;
-    Ok(apply_charset(lines, &cli.foreground, &cli.background))
+    rsidlet::chilet::render(message, &options)
+        .map_err(|e| io::Error::new(io::ErrorKind::Other, e.to_string()))
 }
 
 /// Figlet/Toilet 模式渲染
@@ -268,21 +258,3 @@ fn wrap_figlet_lines(data: &figfont::FontData, message: &str, max_width: usize) 
     result
 }
 
-/// 对已经渲染的 ASCII 行进行字符替换（chilet 模式的 fore/back 自定义）
-fn apply_charset(lines: Vec<String>, fore: &str, back: &str) -> Vec<String> {
-    if fore == "█" && back == " " {
-        return lines;
-    }
-    lines
-        .iter()
-        .map(|line| {
-            line.chars()
-                .map(|c| match c {
-                    '█' => fore.chars().next().unwrap_or('█'),
-                    ' ' => back.chars().next().unwrap_or(' '),
-                    other => other,
-                })
-                .collect::<String>()
-        })
-        .collect()
-}

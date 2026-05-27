@@ -20,6 +20,7 @@ before:
 
 builds:
   - builder: rust
+    tool: cargo-zigbuild
     flags:
       - --release
     targets:

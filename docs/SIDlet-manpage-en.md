@@ -28,10 +28,10 @@ sidlet [options...] [message]
 :   Select the font file or font name. The file extension may be omitted; **sidlet** will automatically try `.flf`, `.tlf`, `.ttf`, `.otf` and other formats. Defaults to `standard.flf`.
 
 **-d** *fontdirectory*, **--directory** *fontdirectory*
-:   Specify an additional local font search directory. This directory has lower search priority than the built-in font directory and the system font directory.
+:   Specify an additional local font search directory. This directory has lower search priority than the built-in font directory, the extended font directory, and system-level figlet directories.
 
 **-s** *size*, **--size** *size*
-:   Specify the bitmap font size for Chilet mode. Supported values are 12, 14, 16 (corresponding to HZK12/HZK14/HZK16). Defaults to `12`. Only affects Chinese bitmap rendering and vector font rendering.
+:   Specify the font size (in pixels) for Chilet mode. Any floating-point value is accepted. When the value is 12, 14, or 16, HZK bitmap fonts (HZK12/HZK14/HZK16) are used preferentially; other values will automatically fall back to system vector font rendering. Defaults to `12`.
 
 ### Output Control Options
 
@@ -53,7 +53,7 @@ sidlet [options...] [message]
 ### Information and Management Commands
 
 **--install** [*fontfile*]
-:   Download and install a specified font file from online font repositories (GitHub). If *fontfile* is omitted, it should be used in combination with other parameters. Font files are installed to the extended font directory (`%USERPROFILE%\fonts` on Windows, `/usr/share/figlet` on Linux/macOS). Supports `.flf`, `.tlf`, and HZK Chinese font file downloads.
+:   Download and install a specified font file from online font repositories (GitHub). If *fontfile* is omitted, it should be used in combination with other parameters. Font files are installed to the extended font directory (`%USERPROFILE%\fonts` on Windows, `$XDG_DATA_HOME/figlet` or `~/.local/share/figlet` on Linux, `~/Library/Application Support/figlet` on macOS). Supports `.flf`, `.tlf`, and HZK Chinese font file downloads.
 
     Online font sources:
     - **FIGlet fonts**: from [xero/figlet-fonts](https://github.com/xero/figlet-fonts) and [PhMajerus/FIGfonts](https://github.com/PhMajerus/FIGfonts)
@@ -68,10 +68,10 @@ sidlet [options...] [message]
     - `font`: List available vector fonts (TTF/OTF) in the system
     - `colormap`: List all available color filter names
     - `installed`: List font files installed in the current font search paths
-    - `letters`: List font file names available for download online but not yet installed locally
+    - `letters`: List font file names available for download online but not yet installed locally (separated by `;`)
 
 **--test**
-:   Check font directory installation status. If the built-in font directory (Directory A) or extended font directory (Directory B) is missing, prompt the user whether to repair. The repair process automatically downloads missing essential font files (standard.flf, big.flf, future.tlf, phm-shinonome.flf, and HZK12/HZK14/HZK16). After repair is complete, outputs `It's ready` in rainbow color.
+:   Check font installation status. If the built-in font directory (Directory A) or extended font directory (Directory B) is missing, or required base font files are incomplete, prompt the user whether to repair. The repair process automatically creates the extended font directory and downloads missing essential font files (standard.flf, big.flf, future.tlf, phm-shinonome.flf, and HZK12/HZK14/HZK16). After repair is complete, outputs `It's ready` in rainbow color.
 
 ### General Options
 
@@ -135,7 +135,8 @@ sidlet --install [font_name.flf]
 Downloaded font files are stored in the extended font directory:
 
 - **Windows**: `%USERPROFILE%\fonts`
-- **Linux/macOS**: `/usr/share/figlet`
+- **Linux**: `$XDG_DATA_HOME/figlet` or `~/.local/share/figlet`
+- **macOS**: `~/Library/Application Support/figlet`
 
 ### Chinese Rendering Support
 
@@ -153,8 +154,11 @@ Chinese rendering supports custom foreground and background characters (via the 
 1. **Built-in font directory (Directory A)**: The `../fonts` subdirectory relative to the executable, or `../fonts`/`fonts` relative to the current working directory.
 2. **Extended font directory (Directory B)**:
    - Windows: `%USERPROFILE%\fonts`
-   - Linux/macOS: `/usr/share/figlet` or `/usr/local/share/figlet`
-3. **User-specified directory**: An additional directory specified via the `-d`/`--directory` flag.
+   - Linux: `$XDG_DATA_HOME/figlet` or `~/.local/share/figlet`
+   - macOS: `~/Library/Application Support/figlet`
+3. **System-level figlet directories** (read-only, for fonts installed by package managers):
+   - Linux/macOS: `/usr/share/figlet`, `/usr/local/share/figlet`
+4. **User-specified directory**: An additional directory specified via the `-d`/`--directory` flag.
 
 ## FILE FORMATS
 
@@ -166,6 +170,7 @@ Chinese rendering supports custom foreground and background characters (via the 
 | `.tlf` | TOIlet Font | TOIlet font file, signature `tlf2a`, supports Unicode and color tags |
 | `.flc` | FIGlet Control | FIGlet Control file for character mapping |
 | `.ttf` / `.otf` | TrueType/OpenType | Vector font for Chinese/Unicode character rendering |
+| `.bdf` | BDF Bitmap | Bitmap font (Glyph Bitmap Distribution Format), usable for Chinese/Unicode character rendering |
 | `HZK*` | HZK Bitmap | Chinese bitmap font (no extension), GB2312 encoding |
 
 ## EXAMPLES
@@ -274,10 +279,18 @@ sidlet -C 8859-8.flc -f standard.flf "Shalom"
 ### Basic Rendering
 
 ```rust
-use rsidlet::figfont;
+use rsidlet::figfont::{FigFont, FigletFont, ToiletFont};
 
-let data = figfont::load_font_data("standard.flf")?;
-let lines = data.render("Hello World");
+// Load a FIGlet font
+let font = FigletFont::load("fonts/standard.flf")?;
+let lines = font.render("Hello World");
+for line in &lines {
+    println!("{}", line);
+}
+
+// Load a TOIlet font
+let toilet_font = ToiletFont::load("fonts/future.tlf")?;
+let lines = toilet_font.render("Hello");
 for line in &lines {
     println!("{}", line);
 }
@@ -286,17 +299,36 @@ for line in &lines {
 ### Chinese Rendering
 
 ```rust
-use rsidlet::chilet;
+use rsidlet::chilet::{self, RenderOptions};
 
-// HZK bitmap font
-if let Some(path) = chilet::find_hzk("HZK16") {
-    let lines = chilet::render_hzk("你好", &path)?;
-    for line in &lines { println!("{}", line); }
+// Use the unified rendering entry point (auto-selects HZK or vector font)
+let options = RenderOptions::default()
+    .with_size(16)
+    .chars('█', ' ');
+
+let lines = chilet::render("你好世界", &options)?;
+for line in &lines {
+    println!("{}", line);
 }
 
-// Vector font
-let lines = chilet::render_vector_font("你好", "SimHei", 32.0)?;
-for line in &lines { println!("{}", line); }
+// Use HZK bitmap font directly (requires specifying foreground/background chars)
+if let Some(path) = chilet::find_hzk("HZK16") {
+    let lines = chilet::render_hzk("你好", &path, '█', ' ')?;
+    for line in &lines {
+        println!("{}", line);
+    }
+}
+
+// Use a system vector font
+let options = RenderOptions::default()
+    .with_size(32)
+    .font("SimHei")
+    .chars('█', ' ');
+
+let lines = chilet::render("你好", &options)?;
+for line in &lines {
+    println!("{}", line);
+}
 ```
 
 ### Color Filters
@@ -327,6 +359,9 @@ for line in &combined {
 `USERPROFILE` (Windows) or `HOME` (Linux/macOS)
 :   Used to determine the user's home directory, and subsequently the extended font directory.
 
+`XDG_DATA_HOME` (Linux)
+:   If set, overrides `~/.local/share` as the base path for the extended font directory. If not set, defaults to `~/.local/share/figlet`.
+
 `WINDIR` (Windows)
 :   Used to locate the system font directory (`%WINDIR%\Fonts`).
 
@@ -350,4 +385,4 @@ Please submit bug reports to the project repository:
 
 ---
 
-v1.0.5+, 2026 -- SIDLET(1)
+v1.1.0+, 2026 -- SIDLET(1)

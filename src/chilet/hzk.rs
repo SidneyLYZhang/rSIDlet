@@ -5,24 +5,38 @@ use std::path::Path;
 /// HZK 点阵字库的字体大小信息
 #[derive(Debug, Clone, Copy)]
 struct HzkInfo {
-    /// 字符宽度（像素）
+    /// 字符宽度（像素/位）
     pub width: usize,
-    /// 字符高度（像素）
+    /// 字符高度（像素/行数）
     pub height: usize,
     /// 每个字符占用字节数
     pub bytes_per_char: usize,
+    /// 每行占用字节数 = ceil(width / 8)
+    pub bytes_per_row: usize,
 }
 
 impl HzkInfo {
     fn from_filename(name: &str) -> Option<Self> {
-        // 从 "HZK16"、"HZK14"、"HZK12" 中提取数字
-        let num: usize = name
-            .strip_prefix("HZK")
-            .and_then(|s| s.parse().ok())?;
+        let num: usize = name.strip_prefix("HZK").and_then(|s| s.parse().ok())?;
         match num {
-            16 => Some(HzkInfo { width: 16, height: 16, bytes_per_char: 32 }),
-            14 => Some(HzkInfo { width: 14, height: 14, bytes_per_char: 28 }),
-            12 => Some(HzkInfo { width: 12, height: 12, bytes_per_char: 24 }),
+            16 => Some(HzkInfo {
+                width: 16,
+                height: 16,
+                bytes_per_char: 32,
+                bytes_per_row: 2,
+            }),
+            14 => Some(HzkInfo {
+                width: 14,
+                height: 14,
+                bytes_per_char: 28,
+                bytes_per_row: 2,
+            }),
+            12 => Some(HzkInfo {
+                width: 12,
+                height: 12,
+                bytes_per_char: 24,
+                bytes_per_row: 2,
+            }),
             _ => None,
         }
     }
@@ -32,7 +46,6 @@ impl HzkInfo {
 ///
 /// 返回文件的字节偏移量。若字符无法编码为 GB2312 或不在汉字范围内，返回 `None`。
 fn gb2312_to_offset(ch: char, info: HzkInfo) -> Option<usize> {
-    // 用 GBK 编码（兼容 GB2312），获取 GB2312 双字节码
     let mut s = [0u8; 4];
     let s = ch.encode_utf8(&mut s);
     let (encoded, _encoding, _had_replacements) = encoding_rs::GBK.encode(s);
@@ -60,19 +73,26 @@ fn read_char_data(file: &mut fs::File, offset: usize, len: usize) -> io::Result<
 
 /// 将点阵数据转换为 ASCII 字符串行
 ///
-/// 每两个字节代表一行像素（大端序），MSB 对应左侧像素。
-/// 位为 1 → 输出 `█`（前景），位为 0 → 输出空格（背景）。
-fn bitmap_to_ascii(data: &[u8], info: HzkInfo) -> Vec<String> {
-    let bytes_per_row = 2; // HZK 格式每行固定 2 字节
+/// HZK 字库中每行像素占用 `bytes_per_row` 个字节（大端序，MSB 对应左侧像素）。
+/// 对于宽度 < 16 的字号（HZK12/HZK14），有效位左对齐在高位。
+/// 位为 1 → 输出前景字符，位为 0 → 输出背景字符。
+fn bitmap_to_ascii(data: &[u8], info: HzkInfo, fg_char: char, bg_char: char) -> Vec<String> {
     (0..info.height)
         .map(|row| {
-            let offset = row * bytes_per_row;
-            let byte0 = data[offset];
-            let byte1 = data[offset + 1];
-            let bits = ((byte0 as u16) << 8) | (byte1 as u16);
+            let offset = row * info.bytes_per_row;
+            // 将整行字节合并为 u16（大端序）
+            let mut bits: u16 = 0;
+            for b in 0..info.bytes_per_row.min(2) {
+                bits = (bits << 8) | (data[offset + b] as u16);
+            }
+            // 左对齐：从 MSB 开始取 width 位（bits 15..(16-width)）
             (0..info.width)
                 .map(|col| {
-                    if (bits >> (15 - col)) & 1 == 1 { '█' } else { ' ' }
+                    if (bits >> (15 - col)) & 1 == 1 {
+                        fg_char
+                    } else {
+                        bg_char
+                    }
                 })
                 .collect::<String>()
         })
@@ -82,35 +102,48 @@ fn bitmap_to_ascii(data: &[u8], info: HzkInfo) -> Vec<String> {
 /// 从 HZK 点阵字库文件中渲染指定文本为 ASCII 图形
 ///
 /// # Arguments
-/// * `text` - 要渲染的中文文本
-/// * `hzk_path` - HZK 字库文件的路径
+/// * `text` - 要渲染的文本（支持中文，非中文字符以背景字符填充）
+/// * `hzk_path` - HZK 字库文件的路径（文件名决定字号，如 HZK16、HZK14、HZK12）
+/// * `fg_char` - 前景字符（默认 `'█'`）
+/// * `bg_char` - 背景字符（默认 `' '`）
 ///
 /// # Returns
 /// 多行 ASCII 字符串，每行对应文本中所有字符的同一像素行。
 /// 每个字符之间用一个空格分隔。
-pub fn render_hzk(text: &str, hzk_path: &Path) -> io::Result<Vec<String>> {
+pub fn render_hzk(
+    text: &str,
+    hzk_path: &Path,
+    fg_char: char,
+    bg_char: char,
+) -> io::Result<Vec<String>> {
     let filename = hzk_path
         .file_stem()
         .and_then(|s| s.to_str())
-        .ok_or_else(|| io::Error::new(io::ErrorKind::InvalidInput, "无法解析 HZK 文件名"))?;
+        .ok_or_else(|| {
+            io::Error::new(io::ErrorKind::InvalidInput, "无法解析 HZK 文件名")
+        })?;
 
-    let info = HzkInfo::from_filename(filename)
-        .ok_or_else(|| io::Error::new(io::ErrorKind::InvalidInput, "不支持的 HZK 格式，支持 HZK12/HZK14/HZK16"))?;
+    let info = HzkInfo::from_filename(filename).ok_or_else(|| {
+        io::Error::new(
+            io::ErrorKind::InvalidInput,
+            "不支持的 HZK 格式，支持 HZK12/HZK14/HZK16",
+        )
+    })?;
 
     let mut file = fs::File::open(hzk_path)?;
 
     let mut all_rows: Vec<String> = vec![String::new(); info.height];
 
     for ch in text.chars() {
-        // 非中文字符用空白替代
         let char_rows: Vec<String> = match gb2312_to_offset(ch, info) {
-            Some(offset) => {
-                match read_char_data(&mut file, offset, info.bytes_per_char) {
-                    Ok(data) => bitmap_to_ascii(&data, info),
-                    Err(_) => vec![" ".repeat(info.width); info.height],
-                }
+            Some(offset) => match read_char_data(&mut file, offset, info.bytes_per_char) {
+                Ok(data) => bitmap_to_ascii(&data, info, fg_char, bg_char),
+                Err(_) => vec![bg_char.to_string().repeat(info.width); info.height],
+            },
+            None => {
+                // 非中文字符：填充背景字符
+                vec![bg_char.to_string().repeat(info.width); info.height]
             }
-            None => vec![" ".repeat(info.width); info.height],
         };
 
         for row in 0..info.height {

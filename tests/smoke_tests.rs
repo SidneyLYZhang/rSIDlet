@@ -54,7 +54,7 @@ mod chilet_tests {
     #[test]
     fn render_hzk_basic_chinese() {
         let path = hzk_path("HZK16");
-        let lines = chilet::render_hzk("中文", &path).expect("渲染中文应成功");
+        let lines = chilet::render_hzk("中文", &path, '█', ' ').expect("渲染中文应成功");
         assert_eq!(lines.len(), 16, "HZK16 应输出 16 行");
         for line in &lines {
             assert!(!line.is_empty(), "每行都不应为空");
@@ -64,7 +64,7 @@ mod chilet_tests {
     #[test]
     fn render_hzk_with_ascii_mixed() {
         let path = hzk_path("HZK16");
-        let lines = chilet::render_hzk("Hello世界", &path).expect("渲染混合文本应成功");
+        let lines = chilet::render_hzk("Hello世界", &path, '█', ' ').expect("渲染混合文本应成功");
         assert_eq!(lines.len(), 16, "HZK16 应输出 16 行");
     }
 
@@ -72,7 +72,7 @@ mod chilet_tests {
     fn render_hzk_different_sizes() {
         for (name, expected_height) in &[("HZK12", 12), ("HZK14", 14), ("HZK16", 16)] {
             let path = hzk_path(name);
-            let lines = chilet::render_hzk("测试", &path).expect("渲染应成功");
+            let lines = chilet::render_hzk("测试", &path, '█', ' ').expect("渲染应成功");
             assert_eq!(
                 lines.len(),
                 *expected_height,
@@ -86,7 +86,7 @@ mod chilet_tests {
     #[test]
     fn render_hzk_empty_string() {
         let path = hzk_path("HZK16");
-        let lines = chilet::render_hzk("", &path).expect("渲染空字符串应成功");
+        let lines = chilet::render_hzk("", &path, '█', ' ').expect("渲染空字符串应成功");
         assert_eq!(lines.len(), 16, "空字符串仍应输出正确高度");
         for line in &lines {
             assert!(line.is_empty(), "空字符串每行都应为空");
@@ -96,7 +96,7 @@ mod chilet_tests {
     #[test]
     fn render_hzk_all_ascii() {
         let path = hzk_path("HZK16");
-        let lines = chilet::render_hzk("ABC123", &path).expect("渲染纯 ASCII 应成功");
+        let lines = chilet::render_hzk("ABC123", &path, '█', ' ').expect("渲染纯 ASCII 应成功");
         assert_eq!(lines.len(), 16);
     }
 }
@@ -754,7 +754,7 @@ fn end_to_end_standard_flf_render() {
 #[test]
 fn end_to_end_hzk_render_with_color() {
     let path = hzk_path("HZK16");
-    let lines = rsidlet::chilet::render_hzk("你好", &path).expect("HZK 渲染应成功");
+    let lines = rsidlet::chilet::render_hzk("你好", &path, '█', ' ').expect("HZK 渲染应成功");
     let colored = ColorFilter::Fire.apply(&lines);
     assert_eq!(colored.len(), lines.len());
 }

@@ -8,19 +8,205 @@ This project provides both a CLI tool (`sidlet`) and a Rust library for integrat
 
 ## Installation
 
-### CLI Tool
+### Method 1: Install Script (Recommended)
 
-```bash
-cargo install rsidlet
+Run the install script directly from GitHub to automatically download the latest pre-built binary and complete the installation. The script handles font files, PATH configuration, and other setup tasks automatically.
+
+#### Windows (PowerShell)
+
+Run the following command in PowerShell:
+
+```powershell
+iwr -Uri "https://raw.githubusercontent.com/SidneyLYZhang/rSIDlet/main/install.ps1" -OutFile "$env:TEMP\install.ps1"; & "$env:TEMP\install.ps1"
 ```
 
-Since cargo only compiles binary files, the compiled binary may be missing font files. To fix this, use the `--test` flag.
+The install script will automatically:
+- Download the latest release for your platform
+- Install `sidlet.exe` to `%LOCALAPPDATA%\Programs\rsidlet\`
+- Copy font files to the installation directory
+- Add the installation directory to your user `PATH` environment variable
+
+> **Tip**: If the command is not available immediately after installation, restart your terminal.
+
+#### Linux / macOS (bash)
+
+Run the following command in your terminal:
 
 ```bash
-sidlet --test to repair
+curl -fsSL https://raw.githubusercontent.com/SidneyLYZhang/rSIDlet/main/install.sh | bash
+```
+
+The install script will automatically:
+- Detect your operating system and architecture
+- Download the corresponding latest release
+- Install `sidlet` to `~/.local/bin/`
+- Copy font files to the installation directory
+
+> **Note**: If `~/.local/bin` is not on your `PATH`, the script will prompt you to add it. You can also specify a custom install directory via an environment variable:
+> ```bash
+> RSIDLET_INSTALL_DIR=/your/custom/path bash install.sh
+> ```
+
+#### Installing a Specific Version
+
+To install a specific version, pass the version tag as a parameter:
+
+```bash
+# Linux / macOS
+curl -fsSL https://raw.githubusercontent.com/SidneyLYZhang/rSIDlet/main/install.sh | bash -s v1.1.0
+
+# Windows PowerShell
+$ver="v1.1.0"; iwr -Uri "https://raw.githubusercontent.com/SidneyLYZhang/rSIDlet/main/install.ps1" -OutFile "$env:TEMP\install.ps1"; & "$env:TEMP\install.ps1" -Version $ver
+```
+
+### Method 2: Build from Source
+
+If pre-built binaries are not available for your platform, or if you need the latest development version, you can build from source.
+
+#### Prerequisites
+
+- [Rust toolchain](https://rustup.rs/) (stable channel)
+- [Git](https://git-scm.com/)
+
+#### Steps
+
+**1. Clone the Repository**
+
+```bash
+git clone https://github.com/SidneyLYZhang/rSIDlet.git
+cd rSIDlet
+```
+
+**2. Build and Install**
+
+```bash
+# Build the release version
+cargo build --release
+
+# Install to system
+make install
+```
+
+`make install` will automatically, depending on your operating system:
+- Copy the compiled binary to the installation directory
+- Copy the `fonts/` folder
+
+> **Manual Installation**: If you do not use `make install`, you need to manually copy `target/release/sidlet` (`target\release\sidlet.exe` on Windows) to a directory on your `PATH`, and ensure the `fonts/` folder is located in the same directory as the executable or its parent directory.
+
+**3. Fonts Folder Notes**
+
+The fonts folder (`fonts/`) contains the following required files:
+
+| File | Description |
+|------|-------------|
+| `standard.flf` | Default FIGlet font |
+| `big.flf` | Large FIGlet font |
+| `phm-shinonome.flf` | PHM shinonome font |
+| `future.tlf` | TOIlet future font |
+| `HZK12` / `HZK14` / `HZK16` | Bitmap Chinese fonts |
+
+At runtime, the program searches for fonts in the following priority order:
+1. `fonts/` directory at the same level as or one level above the executable
+2. User extended font directory (see [Font Search Paths](docs/SIDlet-manpage-en.md))
+3. System-level figlet directories (`/usr/share/figlet`, etc.)
+
+If you move the executable to a different location, make sure the `fonts/` folder is present in the same directory, or run `sidlet --test` to automatically repair the font configuration.
+
+#### OS-Specific Build Instructions
+
+<details>
+<summary><b>Linux</b></summary>
+
+```bash
+# Install Rust toolchain
+curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs | sh
+source ~/.cargo/env
+
+# Install build dependencies (Ubuntu/Debian example)
+sudo apt install build-essential pkg-config
+
+# Clone and build
+git clone https://github.com/SidneyLYZhang/rSIDlet.git
+cd rSIDlet
+cargo build --release
+make install
+```
+</details>
+
+<details>
+<summary><b>macOS</b></summary>
+
+```bash
+# Install Xcode Command Line Tools (if not already installed)
+xcode-select --install
+
+# Install Rust toolchain
+curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs | sh
+source ~/.cargo/env
+
+# Clone and build
+git clone https://github.com/SidneyLYZhang/rSIDlet.git
+cd rSIDlet
+cargo build --release
+make install
+```
+</details>
+
+<details>
+<summary><b>Windows</b></summary>
+
+```powershell
+# Install Rust toolchain (download rustup-init.exe from https://rustup.rs/)
+
+# Clone the repository
+git clone https://github.com/SidneyLYZhang/rSIDlet.git
+cd rSIDlet
+
+# Build
+cargo build --release
+
+# Install
+make install
+```
+
+> On Windows, you can also install via Cargo and then repair fonts with `sidlet --test`:
+> ```powershell
+> cargo install rsidlet
+> sidlet --test
+> ```
+</details>
+
+### Verifying the Installation
+
+After installation, run the following command to verify the installation was successful:
+
+```bash
+sidlet --version
+```
+
+If installed correctly, this will output the current version number.
+
+Run the self-check command to ensure all font files are intact:
+
+```bash
+sidlet --test
+```
+
+If everything is in order, you will see `It's ready` displayed in rainbow colors.
+
+Test the rendering functionality:
+
+```bash
+# English rendering
+sidlet "Hello World"
+
+# Chinese rendering
+sidlet "你好世界"
 ```
 
 ### Library
+
+To use in a Rust project, add `rsidlet` as a dependency:
 
 ```bash
 cargo add rsidlet

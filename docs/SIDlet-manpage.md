@@ -28,10 +28,10 @@ sidlet [选项...] [message]
 :   指定字体文件或字体名称。音译扩展名可省略，**sidlet** 将自动尝试 `.flf`、`.tlf`、`.ttf`、`.otf` 等格式。默认使用 `standard.flf`。
 
 **-d** *fontdirectory*, **--directory** *fontdirectory*
-:   指定额外的本地字体搜索目录。该目录的搜索优先级低于内置字体目录和系统字体目录。
+:   指定额外的本地字体搜索目录。该目录的搜索优先级低于内置字体目录、扩展字体目录和系统级 figlet 目录。
 
 **-s** *size*, **--size** *size*
-:   指定 Chilet 模式下点阵字体的大小。支持 12、14、16（对应 HZK12/HZK14/HZK16）。默认值为 `12`。仅对中文点阵渲染和矢量字体渲染生效。
+:   指定 Chilet 模式下的字号（像素）。支持任意浮点数值。当值为 12、14、16 时优先使用 HZK 点阵字库（HZK12/HZK14/HZK16）；其他值将自动回退到系统矢量字体遮蔽方案。默认值为 `12`。
 
 ### 输出控制选项
 
@@ -53,7 +53,7 @@ sidlet [选项...] [message]
 ### 信息与管理命令
 
 **--install** [*fontfile*]
-:   从在线字体仓库（GitHub）下载并安装指定的字体文件。若省略 fontfile，则需配合其他参数使用。字体文件将安装到扩展字体目录（Windows 下为 `%USERPROFILE%\fonts`，Linux/macOS 下为 `/usr/share/figlet`）。支持 `.flf`、`.tlf` 以及 HZK 中文字库文件的下载。
+:   从在线字体仓库（GitHub）下载并安装指定的字体文件。若省略 fontfile，则需配合其他参数使用。字体文件将安装到扩展字体目录（Windows 下为 `%USERPROFILE%\fonts`，Linux 下为 `$XDG_DATA_HOME/figlet` 或 `~/.local/share/figlet`，macOS 下为 `~/Library/Application Support/figlet`）。支持 `.flf`、`.tlf` 以及 HZK 中文字库文件的下载。
     
     在线字体来源：
     - **FIGlet 字体**：来自 [xero/figlet-fonts](https://github.com/xero/figlet-fonts) 和 [PhMajerus/FIGfonts](https://github.com/PhMajerus/FIGfonts)
@@ -68,10 +68,10 @@ sidlet [选项...] [message]
     - `font`：列出系统中可用的矢量字体（TTF/OTF）
     - `colormap`：列出所有可用的颜色遮蔽名称
     - `installed`：列出当前字体搜索路径中已安装的字体文件
-    - `letters`：列出在线可下载但本地尚未安装的字体文件名
+    - `letters`：列出在线可下载但本地尚未安装的字体文件名（以 `;` 分隔）
 
 **--test**
-:   检查字体目录安装状态。若内置字体目录（目录A）或扩展字体目录（目录B）缺失，将提示用户是否进行修复。修复过程会自动下载缺失的必要字体文件（standard.flf、big.flf、future.tlf、phm-shinonome.flf 以及 HZK12/HZK14/HZK16）。修复完成后，以彩虹色输出 `It's ready`。
+:   检查字体安装状态。若内置字体目录（目录A）或扩展字体目录（目录B）缺失，或者必要的基础字体文件不完整，将提示用户是否进行修复。修复过程会自动创建扩展字体目录并下载缺失的必要字体文件（standard.flf、big.flf、future.tlf、phm-shinonome.flf 以及 HZK12/HZK14/HZK16）。修复完成后，以彩虹色输出 `It's ready`。
 
 ### 通用选项
 
@@ -135,7 +135,8 @@ sidlet --install [font_name.flf]
 下载后的字体文件存放在扩展字体目录中：
 
 - **Windows**：`%USERPROFILE%\fonts`
-- **Linux/macOS**：`/usr/share/figlet`
+- **Linux**：`$XDG_DATA_HOME/figlet` 或 `~/.local/share/figlet`
+- **macOS**：`~/Library/Application Support/figlet`
 
 ### 中文渲染支持
 
@@ -153,8 +154,11 @@ sidlet --install [font_name.flf]
 1. **内置字体目录（目录A）**：可执行文件所在目录的 `../fonts` 子目录，或当前工作目录的 `../fonts`、`fonts` 子目录。
 2. **扩展字体目录（目录B）**：
    - Windows：`%USERPROFILE%\fonts`
-   - Linux/macOS：`/usr/share/figlet` 或 `/usr/local/share/figlet`
-3. **用户指定目录**：通过 `-d`/`--directory` 参数指定的额外目录。
+   - Linux：`$XDG_DATA_HOME/figlet` 或 `~/.local/share/figlet`
+   - macOS：`~/Library/Application Support/figlet`
+3. **系统级 figlet 目录**（只读，供包管理器安装字体时使用）：
+   - Linux/macOS：`/usr/share/figlet`、`/usr/local/share/figlet`
+4. **用户指定目录**：通过 `-d`/`--directory` 参数指定的额外目录。
 
 ## 文件格式 (FILE FORMATS)
 
@@ -166,6 +170,7 @@ sidlet --install [font_name.flf]
 | `.tlf` | TOIlet Font | TOIlet 字体文件，签名 `tlf2a`，支持 Unicode 和颜色标记 |
 | `.flc` | FIGlet Control | FIGlet Control 文件，用于字符映射 |
 | `.ttf` / `.otf` | TrueType/OpenType | 矢量字体，用于中文/统码字符的渲染 |
+| `.bdf` | BDF Bitmap | 位图字体（Glyph Bitmap Distribution Format），可用于中文/Unicode 字符渲染 |
 | `HZK*` | HZK Bitmap | 中文点阵字库（无扩展名），GB2312 编码 |
 
 ## 示例 (EXAMPLES)
@@ -274,10 +279,18 @@ sidlet -C 8859-8.flc -f standard.flf "Shalom"
 ### 基础渲染
 
 ```rust
-use rsidlet::figfont;
+use rsidlet::figfont::{FigFont, FigletFont, ToiletFont};
 
-let data = figfont::load_font_data("standard.flf")?;
-let lines = data.render("Hello World");
+// 加载 FIGlet 字体
+let font = FigletFont::load("fonts/standard.flf")?;
+let lines = font.render("Hello World");
+for line in &lines {
+    println!("{}", line);
+}
+
+// 加载 TOIlet 字体
+let toilet_font = ToiletFont::load("fonts/future.tlf")?;
+let lines = toilet_font.render("Hello");
 for line in &lines {
     println!("{}", line);
 }
@@ -286,17 +299,36 @@ for line in &lines {
 ### 中文渲染
 
 ```rust
-use rsidlet::chilet;
+use rsidlet::chilet::{self, RenderOptions};
 
-// HZK 点阵字库
-if let Some(path) = chilet::find_hzk("HZK16") {
-    let lines = chilet::render_hzk("你好", &path)?;
-    for line in &lines { println!("{}", line); }
+// 使用统一渲染入口（自动选择 HZK 或矢量字体）
+let options = RenderOptions::default()
+    .with_size(16)
+    .chars('█', ' ');
+
+let lines = chilet::render("你好世界", &options)?;
+for line in &lines {
+    println!("{}", line);
 }
 
-// 矢量字体
-let lines = chilet::render_vector_font("你好", "SimHei", 32.0)?;
-for line in &lines { println!("{}", line); }
+// 使用 HZK 点阵字库（需要自己指定前后景字符）
+if let Some(path) = chilet::find_hzk("HZK16") {
+    let lines = chilet::render_hzk("你好", &path, '█', ' ')?;
+    for line in &lines {
+        println!("{}", line);
+    }
+}
+
+// 使用系统矢量字体
+let options = RenderOptions::default()
+    .with_size(32)
+    .font("SimHei")
+    .chars('█', ' ');
+
+let lines = chilet::render("你好", &options)?;
+for line in &lines {
+    println!("{}", line);
+}
 ```
 
 ### 颜色滤镜
@@ -327,6 +359,9 @@ for line in &combined {
 `USERPROFILE`（Windows）或 `HOME`（Linux/macOS）
 :   用于确定用户主目录，进而定位扩展字体目录。
 
+`XDG_DATA_HOME`（Linux）
+:   若设置，将替代 `~/.local/share` 作为扩展字体目录的基础路径。若未设置，则默认使用 `~/.local/share/figlet`。
+
 `WINDIR`（Windows）
 :   用于定位系统字体目录（`%WINDIR%\Fonts`）。
 
@@ -351,4 +386,4 @@ for line in &combined {
 
 ---
 
-v1.0.5+, 2026 -- SIDLET(1)
+v1.1.0+, 2026 -- SIDLET(1)

@@ -1,0 +1,38 @@
+name: Sync Wiki
+on:
+  push:
+    branches: [ "main" ]
+    # 关键：只在指定文件夹下的文件发生变动时才触发同步
+    paths:
+      - 'docs/**'
+      - '.github/workflows/sync-wiki.yml'
+
+# 控制并发，避免同步冲突
+concurrency:
+  group: publish-wiki
+  cancel-in-progress: true
+
+# 授予写入权限
+permissions:
+  contents: write
+
+jobs:
+  sync-wiki:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout Code
+        uses: actions/checkout@v4
+
+      - name: Sync Wiki
+        uses: Andrew-Chen-Wang/github-wiki-action@v4
+        env:
+          # 使用自动生成的 GITHUB_TOKEN，无需额外配置
+          # GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          # 如果遇到权限问题，也可以换用 Personal Access Token (PAT)
+          # GH_TOKEN: ${{ secrets.PERSONAL_ACCESS_TOKEN }}
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        with:
+          # 关键：指定你要同步到 Wiki 的文件夹路径
+          path: docs
+          # 可选：自定义提交信息
+          commit-message: "📝 同步 ${{ github.sha }} 的文档更新"

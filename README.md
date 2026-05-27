@@ -8,19 +8,205 @@
 
 ## 安装
 
-### 命令行工具
+### 方式一：安装脚本（推荐）
 
-```bash
-cargo install rsidlet
+直接从 GitHub 执行安装脚本，自动下载最新的预编译二进制文件并完成安装。脚本会自动处理字体文件、路径配置等。
+
+#### Windows（PowerShell）
+
+在 PowerShell 中执行以下命令：
+
+```powershell
+iwr -Uri "https://raw.githubusercontent.com/SidneyLYZhang/rSIDlet/main/install.ps1" -OutFile "$env:TEMP\install.ps1"; & "$env:TEMP\install.ps1"
 ```
 
-由于cargo只能编译二进制文件，所以编译完成可能会缺失字体文件，需要使用命令自带 `--test` 功能进行修复。
+安装脚本会自动：
+- 下载对应平台的最新发布版本
+- 将 `sidlet.exe` 安装到 `%LOCALAPPDATA%\Programs\rsidlet\`
+- 复制字体文件到安装目录
+- 将安装目录添加到用户 `PATH` 环境变量
+
+> **提示**：如果安装完成后命令未立即生效，请重新打开终端。
+
+#### Linux / macOS（bash）
+
+在终端中执行以下命令：
+
+```bash
+curl -fsSL https://raw.githubusercontent.com/SidneyLYZhang/rSIDlet/main/install.sh | bash
+```
+
+安装脚本会自动：
+- 检测操作系统和架构
+- 下载对应的最新发布版本
+- 将 `sidlet` 安装到 `~/.local/bin/`
+- 复制字体文件到安装目录
+
+> **注意**：如果 `~/.local/bin` 不在你的 `PATH` 中，脚本会提示你添加。你也可以通过环境变量自定义安装目录：
+> ```bash
+> RSIDLET_INSTALL_DIR=/your/custom/path bash install.sh
+> ```
+
+#### 指定版本安装
+
+如需安装特定版本，将版本号作为参数传递：
+
+```bash
+# Linux / macOS
+curl -fsSL https://raw.githubusercontent.com/SidneyLYZhang/rSIDlet/main/install.sh | bash -s v1.1.0
+
+# Windows PowerShell
+$ver="v1.1.0"; iwr -Uri "https://raw.githubusercontent.com/SidneyLYZhang/rSIDlet/main/install.ps1" -OutFile "$env:TEMP\install.ps1"; & "$env:TEMP\install.ps1" -Version $ver
+```
+
+### 方式二：源码编译安装
+
+如果预编译包不适用于你的平台，或者你需要使用最新开发版本，可以从源码编译安装。
+
+#### 前提条件
+
+- [Rust 工具链](https://rustup.rs/)（stable 版本）
+- [Git](https://git-scm.com/)
+
+#### 步骤
+
+**1. 克隆仓库**
+
+```bash
+git clone https://github.com/SidneyLYZhang/rSIDlet.git
+cd rSIDlet
+```
+
+**2. 编译并安装**
+
+```bash
+# 编译 release 版本
+cargo build --release
+
+# 安装到系统
+make install
+```
+
+`make install` 会根据操作系统自动：
+- 将编译好的二进制文件复制到安装目录
+- 复制 `fonts/` 字体文件夹
+
+> **手动安装说明**：如果不使用 `make install`，你需要手动将 `target/release/sidlet`（Windows 下为 `target\release\sidlet.exe`）复制到 PATH 中的某个目录，同时确保 `fonts/` 文件夹位于可执行文件同级目录或上一级目录。
+
+**3. 字体文件夹特殊说明**
+
+字体文件夹（`fonts/`）包含以下必要文件：
+
+| 文件 | 说明 |
+|------|------|
+| `standard.flf` | 默认 FIGlet 字体 |
+| `big.flf` | 大号 FIGlet 字体 |
+| `phm-shinonome.flf` | PHM shinonome 字体 |
+| `future.tlf` | TOIlet future 字体 |
+| `HZK12` / `HZK14` / `HZK16` | 点阵中文字库 |
+
+程序运行时会从以下位置按优先级搜索字体：
+1. 可执行文件同级或上级目录的 `fonts/` 文件夹
+2. 用户扩展字体目录（详见 [字体搜索路径](docs/SIDlet-manpage.md)）
+3. 系统级 figlet 目录（`/usr/share/figlet` 等）
+
+如果你将可执行文件单独移动到其他位置，请确保同目录下存在 `fonts/` 文件夹，或运行 `sidlet --test` 自动修复字体配置。
+
+#### 各操作系统编译说明
+
+<details>
+<summary><b>Linux</b></summary>
+
+```bash
+# 安装 Rust 工具链
+curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs | sh
+source ~/.cargo/env
+
+# 安装编译依赖（以 Ubuntu/Debian 为例）
+sudo apt install build-essential pkg-config
+
+# 克隆并编译
+git clone https://github.com/SidneyLYZhang/rSIDlet.git
+cd rSIDlet
+cargo build --release
+make install
+```
+</details>
+
+<details>
+<summary><b>macOS</b></summary>
+
+```bash
+# 安装 Xcode Command Line Tools（如未安装）
+xcode-select --install
+
+# 安装 Rust 工具链
+curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs | sh
+source ~/.cargo/env
+
+# 克隆并编译
+git clone https://github.com/SidneyLYZhang/rSIDlet.git
+cd rSIDlet
+cargo build --release
+make install
+```
+</details>
+
+<details>
+<summary><b>Windows</b></summary>
+
+```powershell
+# 安装 Rust 工具链（下载 rustup-init.exe 从 https://rustup.rs/）
+
+# 克隆仓库
+git clone https://github.com/SidneyLYZhang/rSIDlet.git
+cd rSIDlet
+
+# 编译
+cargo build --release
+
+# 安装
+make install
+```
+
+> 在 Windows 上也可以直接通过 Cargo 安装，然后运行 `sidlet --test` 修复字体：
+> ```powershell
+> cargo install rsidlet
+> sidlet --test
+> ```
+</details>
+
+### 验证安装
+
+安装完成后，运行以下命令验证安装是否成功：
+
+```bash
+sidlet --version
+```
+
+如果安装正确，会输出当前版本号。
+
+运行自检命令，确保字体文件完整：
 
 ```bash
 sidlet --test
 ```
 
+如果一切正常，会显示彩虹色的 `It's ready`。
+
+测试渲染功能：
+
+```bash
+# 英文渲染
+sidlet "Hello World"
+
+# 中文渲染
+sidlet "你好世界"
+```
+
 ### 库函数
+
+在 Rust 项目中使用，将 `rsidlet` 添加为依赖：
 
 ```bash
 cargo add rsidlet
