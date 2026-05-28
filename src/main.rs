@@ -1,4 +1,4 @@
-use std::io;
+use std::io::{self, IsTerminal, Read};
 use std::path::PathBuf;
 
 use clap::Parser;
@@ -98,15 +98,29 @@ fn run(cli: Cli) -> io::Result<()> {
         return commands::list::run(list_type, cli.font_directory.as_deref());
     }
 
-    // 基础绘制模式
-    let message = if cli.message.is_empty() {
+    // 基础绘制模式：优先使用命令行参数，否则尝试从管道/stdin 读取
+    let message = if !cli.message.is_empty() {
+        cli.message.join(" ")
+    } else if !std::io::stdin().is_terminal() {
+        // stdin 被重定向或管道输入，读取全部内容
+        let mut buf = String::new();
+        std::io::stdin()
+            .read_to_string(&mut buf)
+            .map_err(|e| io::Error::new(io::ErrorKind::Other, format!("读取标准输入失败: {}", e)))?;
+        let trimmed = buf.trim_end().to_string();
+        if trimmed.is_empty() {
+            return Err(io::Error::new(
+                io::ErrorKind::InvalidInput,
+                "标准输入为空",
+            ));
+        }
+        trimmed
+    } else {
         eprintln!("请提供要绘制的文本消息。使用 --help 查看帮助。");
         return Err(io::Error::new(
             io::ErrorKind::InvalidInput,
             "缺少文本消息",
         ));
-    } else {
-        cli.message.join(" ")
     };
 
     draw(&message, &cli)
