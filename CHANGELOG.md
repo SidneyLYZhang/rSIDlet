@@ -5,17 +5,20 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
-## [1.1.3] - 2026-05-28
+## [1.1.5] - 2026-05-28
 
 ### Added
 
 - 画布滤镜系统（Canvas Filter System）：新增 `Canvas` trait（抽象画布像素读写与几何变换操作）、`CanvasFilter` 枚举（Crop / Rainbow / Metal / Flip / Flop / Rotate180 / RotateLeft / RotateRight / Border 共 9 种滤镜）、`FilterContext` 滤镜管线上下文（支持 `:` 分隔的多滤镜链式组合与动画行计数器）
 - `canvas_color` 子模块：映射 libcaca 颜色常量到 ANSI 颜色，提供 `LIGHTBLUE`、`LIGHTGRAY`、`LIGHTMAGENTA` 等 9 种颜色常量
+- 颜色遮蔽（Mask Color）与画布滤镜整合：`--maskcolor` 选项与 `CanvasFilter` 管线深度整合，支持在滤镜链中应用颜色遮蔽效果，实现逐字符/逐行级别的精确颜色过滤
 - 滤镜解析：`CanvasFilter::parse()` 支持从字符串名称解析滤镜，`"rotate"` 可作为 `"180"` 的别名以保持向后兼容
 - 滤镜实现：`apply_crop()` 裁切空白区域、`apply_rainbow()` 彩虹色渐变、`apply_metal()` 金属色效果、`apply_border()` Unicode 方框字符边框
 
 ### Changed
 
+- 画布滤镜管线重构优化：统一滤镜上下文传递机制，优化多滤镜链式组合性能，减少中间画布拷贝次数
+- 颜色遮蔽逻辑迁移至滤镜管线：将原有独立的颜色遮蔽处理流程整合到 `FilterContext` 滤镜链中，作为可组合的滤镜阶段
 - 内置字体目录查找逻辑增强：新增二进制文件同级 `fonts/` 目录（`exe/fonts/`）作为最高优先级查找路径，共支持 4 级路径回退
 - GoReleaser 配置：Windows 构建目标从 `x86_64-pc-windows-msvc` 改为 `x86_64-pc-windows-gnu`，添加 `RING_PREGENERATE_ASM=1` 环境变量
 - CI 工作流（`ci.yml`）：push 事件触发限制为 `main` 分支且仅当 `src/**` 路径变更时触发

@@ -665,18 +665,164 @@ mod utils_tests {
         assert!(utils::parse_filter("bogus_filter_xyz").is_none());
     }
 
-    // --- available_filters ---
+    // --- available_filters / ColorMap::available ---
 
     #[test]
     fn available_filters_has_expected() {
         let filters = utils::available_filters();
-        assert!(filters.contains(&"rainbow"));
-        assert!(filters.contains(&"metal"));
+        // "rainbow" 和 "metal" 现在归属于画布滤镜类别，不再出现在 available_filters() 中
         assert!(filters.contains(&"fire"));
         assert!(filters.contains(&"water"));
         assert!(filters.contains(&"random"));
         assert!(filters.contains(&"red"));
         assert!(filters.contains(&"none"));
+    }
+
+    #[test]
+    fn colormap_available_includes_all() {
+        let maps = utils::ColorMap::available();
+        let names: Vec<&str> = maps.iter().map(|(name, _, _)| *name).collect();
+        // 画布滤镜名称
+        assert!(names.contains(&"crop"));
+        assert!(names.contains(&"rainbow"));
+        assert!(names.contains(&"metal"));
+        assert!(names.contains(&"flip"));
+        assert!(names.contains(&"flop"));
+        assert!(names.contains(&"border"));
+        // 颜色遮蔽名称
+        assert!(names.contains(&"none"));
+        assert!(names.contains(&"fire"));
+        assert!(names.contains(&"water"));
+        assert!(names.contains(&"random"));
+        assert!(names.contains(&"red"));
+        assert!(names.contains(&"rainbowline"));
+    }
+
+    #[test]
+    fn colormap_parse_canvas_priority() {
+        // "rainbow" 和 "metal" 应优先解析为画布滤镜版本
+        let rainbow = utils::ColorMap::parse("rainbow").unwrap();
+        assert_eq!(rainbow.category(), "画布滤镜");
+        assert!(rainbow.to_canvas_filter().is_some());
+        // 但转换为 ColorFilter 也应成功（用于文本输出）
+        assert!(rainbow.to_color_filter().is_some());
+
+        let metal = utils::ColorMap::parse("metal").unwrap();
+        assert_eq!(metal.category(), "画布滤镜");
+        assert!(metal.to_canvas_filter().is_some());
+        assert!(metal.to_color_filter().is_some());
+    }
+
+    #[test]
+    fn colormap_canvas_only_no_color_filter() {
+        // 纯画布滤镜没有颜色等效
+        for name in &["crop", "flip", "flop", "180", "left", "right", "border"] {
+            let cm = utils::ColorMap::parse(name).unwrap();
+            assert_eq!(cm.category(), "画布滤镜");
+            assert!(cm.to_color_filter().is_none(), "{} 不应有颜色等效", name);
+        }
+    }
+
+    // --- ColorMap::apply 文本几何变换 ---
+
+    #[test]
+    fn colormap_apply_flip() {
+        let lines = vec!["AB".to_string(), "CD".to_string()];
+        let result = utils::ColorMap::Flip.apply(&lines);
+        assert_eq!(result, vec!["BA", "DC"]);
+    }
+
+    #[test]
+    fn colormap_apply_flop() {
+        let lines = vec!["AB".to_string(), "CD".to_string()];
+        let result = utils::ColorMap::Flop.apply(&lines);
+        assert_eq!(result, vec!["CD", "AB"]);
+    }
+
+    #[test]
+    fn colormap_apply_rotate180() {
+        let lines = vec!["AB".to_string(), "CD".to_string()];
+        let result = utils::ColorMap::Rotate180.apply(&lines);
+        assert_eq!(result, vec!["DC", "BA"]);
+    }
+
+    #[test]
+    fn colormap_apply_crop() {
+        let lines = vec![
+            "          ".to_string(),
+            "   ABC    ".to_string(),
+            "   DEF    ".to_string(),
+            "          ".to_string(),
+        ];
+        let result = utils::ColorMap::Crop.apply(&lines);
+        assert_eq!(result, vec!["ABC", "DEF"]);
+    }
+
+    #[test]
+    fn colormap_apply_crop_empty() {
+        let lines: Vec<String> = vec!["   ".to_string(), "   ".to_string()];
+        let result = utils::ColorMap::Crop.apply(&lines);
+        assert!(result.is_empty());
+    }
+
+    #[test]
+    fn colormap_apply_border() {
+        let lines = vec!["A".to_string()];
+        let result = utils::ColorMap::Border.apply(&lines);
+        assert_eq!(result.len(), 3);
+        assert!(result[0].starts_with('┌'));
+        assert!(result[0].ends_with('┐'));
+        assert!(result[1].starts_with('│'));
+        assert!(result[1].ends_with('│'));
+        assert!(result[2].starts_with('└'));
+        assert!(result[2].ends_with('┘'));
+    }
+
+    #[test]
+    fn colormap_apply_rotate_left_right_roundtrip() {
+        let lines = vec!["AB".to_string(), "CD".to_string(), "EF".to_string()];
+        let left = utils::ColorMap::RotateLeft.apply(&lines);
+        let roundtrip = utils::ColorMap::RotateRight.apply(&left);
+        // 旋转后各行列顺序与原始一致，但可能有尾部空格差异
+        for (i, line) in roundtrip.iter().enumerate() {
+            assert_eq!(line.trim_end(), lines[i].trim_end());
+        }
+    }
+
+    #[test]
+    fn colormap_apply_rainbow_contains_ansi() {
+        let lines = vec!["ABC".to_string()];
+        let result = utils::ColorMap::Rainbow.apply(&lines);
+        assert!(result[0].contains("\x1b["));
+    }
+
+    #[test]
+    fn colormap_apply_metal_contains_ansi() {
+        let lines = vec!["ABC".to_string()];
+        let result = utils::ColorMap::Metal.apply(&lines);
+        assert!(result[0].contains("\x1b["));
+    }
+
+    #[test]
+    fn colormap_apply_fire_contains_ansi() {
+        let lines = vec!["X".to_string()];
+        let result = utils::ColorMap::Fire.apply(&lines);
+        assert!(result[0].contains("\x1b["));
+    }
+
+    #[test]
+    fn colormap_apply_none_preserves() {
+        let lines = vec!["hello".to_string(), "world".to_string()];
+        let result = utils::ColorMap::None.apply(&lines);
+        assert_eq!(result, lines);
+    }
+
+    #[test]
+    fn colormap_apply_on_empty() {
+        let result = utils::ColorMap::Rainbow.apply(&[]);
+        assert!(result.is_empty());
+        let result = utils::ColorMap::Border.apply(&[]);
+        assert!(result.is_empty());
     }
 
     // --- hcat ---

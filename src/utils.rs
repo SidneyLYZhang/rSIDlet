@@ -369,34 +369,18 @@ pub fn hcat(left: &[String], right: &[String], padding: usize) -> Vec<String> {
         .collect()
 }
 
-/// 根据名称解析颜色滤镜
+/// 根据名称解析颜色滤镜（委托给 [ColorMap]）。
 pub fn parse_filter(name: &str) -> Option<ColorFilter> {
-    match name.to_lowercase().as_str() {
-        "none" | "" => Some(ColorFilter::None),
-        "rainbow" => Some(ColorFilter::Rainbow),
-        "rainbowline" | "rainbow_line" => Some(ColorFilter::RainbowLine),
-        "metal" => Some(ColorFilter::Metal),
-        "fire" => Some(ColorFilter::Fire),
-        "water" => Some(ColorFilter::Water),
-        "random" => Some(ColorFilter::Random),
-        "red" => Some(ColorFilter::Foreground(AnsiColor::Red)),
-        "green" => Some(ColorFilter::Foreground(AnsiColor::Green)),
-        "yellow" => Some(ColorFilter::Foreground(AnsiColor::Yellow)),
-        "blue" => Some(ColorFilter::Foreground(AnsiColor::Blue)),
-        "magenta" => Some(ColorFilter::Foreground(AnsiColor::Magenta)),
-        "cyan" => Some(ColorFilter::Foreground(AnsiColor::Cyan)),
-        "white" => Some(ColorFilter::Foreground(AnsiColor::White)),
-        "black" => Some(ColorFilter::Foreground(AnsiColor::Black)),
-        _ => None,
-    }
+    ColorMap::parse(name).and_then(|cm| cm.to_color_filter())
 }
 
-/// 获取所有可用的滤镜名称列表
+/// 获取所有可用的滤镜名称列表（委托给 [ColorMap]）。
 pub fn available_filters() -> Vec<&'static str> {
-    vec![
-        "none", "rainbow", "rainbowline", "metal", "fire", "water", "random",
-        "red", "green", "yellow", "blue", "magenta", "cyan", "white", "black",
-    ]
+    ColorMap::available()
+        .into_iter()
+        .filter(|(_, _, cat)| *cat == "颜色遮蔽")
+        .map(|(name, _, _)| name)
+        .collect()
 }
 
 // ============================================================
@@ -728,4 +712,386 @@ fn apply_border<C: Canvas>(ctx: &mut FilterContext<C>) {
             ctx.canvas.put_char(x, y, ch);
         }
     }
+}
+
+// ============================================================
+// 统一颜色蒙版系统（Color Map）
+// 整合画布滤镜（CanvasFilter）与颜色遮蔽（ColorFilter），
+// 提供统一的名称解析和应用入口。
+// 命名冲突时：画布滤镜优先级高于颜色遮蔽。
+// ============================================================
+
+/// 统一的颜色蒙版枚举，涵盖所有画布滤镜与颜色遮蔽效果。
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum ColorMap {
+    // ---- 画布滤镜（名称冲突时优先级更高）----
+    Crop,
+    /// 彩虹色（画布滤镜版本，优先级高于颜色遮蔽同名项）
+    Rainbow,
+    /// 金属色（画布滤镜版本，优先级高于颜色遮蔽同名项）
+    Metal,
+    Flip,
+    Flop,
+    Rotate180,
+    RotateLeft,
+    RotateRight,
+    Border,
+    // ---- 颜色遮蔽 ----
+    None,
+    RainbowLine,
+    Fire,
+    Water,
+    Random,
+    Foreground(AnsiColor),
+    Gradient { start: AnsiColor, end: AnsiColor },
+}
+
+impl ColorMap {
+    /// 从名称解析颜色蒙版。
+    /// 对于同时存在画布滤镜和颜色遮蔽的名称（如 "rainbow"、"metal"），
+    /// 画布滤镜优先。
+    pub fn parse(name: &str) -> Option<Self> {
+        match name.to_lowercase().as_str() {
+            // 画布滤镜名称
+            "crop" => Some(Self::Crop),
+            "rainbow" => Some(Self::Rainbow),
+            "metal" => Some(Self::Metal),
+            "flip" => Some(Self::Flip),
+            "flop" => Some(Self::Flop),
+            "180" | "rotate" => Some(Self::Rotate180),
+            "left" => Some(Self::RotateLeft),
+            "right" => Some(Self::RotateRight),
+            "border" => Some(Self::Border),
+            // 颜色遮蔽名称
+            "none" | "" => Some(Self::None),
+            "rainbowline" | "rainbow_line" => Some(Self::RainbowLine),
+            "fire" => Some(Self::Fire),
+            "water" => Some(Self::Water),
+            "random" => Some(Self::Random),
+            "red" => Some(Self::Foreground(AnsiColor::Red)),
+            "green" => Some(Self::Foreground(AnsiColor::Green)),
+            "yellow" => Some(Self::Foreground(AnsiColor::Yellow)),
+            "blue" => Some(Self::Foreground(AnsiColor::Blue)),
+            "magenta" => Some(Self::Foreground(AnsiColor::Magenta)),
+            "cyan" => Some(Self::Foreground(AnsiColor::Cyan)),
+            "white" => Some(Self::Foreground(AnsiColor::White)),
+            "black" => Some(Self::Foreground(AnsiColor::Black)),
+            _ => None,
+        }
+    }
+
+    /// 返回该变体的规范名称。
+    pub fn name(self) -> &'static str {
+        match self {
+            Self::Crop => "crop",
+            Self::Rainbow => "rainbow",
+            Self::Metal => "metal",
+            Self::Flip => "flip",
+            Self::Flop => "flop",
+            Self::Rotate180 => "180",
+            Self::RotateLeft => "left",
+            Self::RotateRight => "right",
+            Self::Border => "border",
+            Self::None => "none",
+            Self::RainbowLine => "rainbowline",
+            Self::Fire => "fire",
+            Self::Water => "water",
+            Self::Random => "random",
+            Self::Foreground(AnsiColor::Red) => "red",
+            Self::Foreground(AnsiColor::Green) => "green",
+            Self::Foreground(AnsiColor::Yellow) => "yellow",
+            Self::Foreground(AnsiColor::Blue) => "blue",
+            Self::Foreground(AnsiColor::Magenta) => "magenta",
+            Self::Foreground(AnsiColor::Cyan) => "cyan",
+            Self::Foreground(AnsiColor::White) => "white",
+            Self::Foreground(AnsiColor::Black) => "black",
+            Self::Foreground(_) => "custom",
+            Self::Gradient { .. } => "gradient",
+        }
+    }
+
+    /// 返回该变体所属类别。
+    pub fn category(self) -> &'static str {
+        match self {
+            Self::Crop | Self::Rainbow | Self::Metal | Self::Flip | Self::Flop
+            | Self::Rotate180 | Self::RotateLeft | Self::RotateRight | Self::Border => {
+                "画布滤镜"
+            }
+            Self::None | Self::RainbowLine | Self::Fire | Self::Water | Self::Random
+            | Self::Foreground(_) | Self::Gradient { .. } => {
+                "颜色遮蔽"
+            }
+        }
+    }
+
+    /// 统一应用颜色蒙版到文本行。
+    ///
+    /// 所有变体（画布滤镜几何变换、画布滤镜颜色效果、颜色遮蔽）均直接作用于
+    /// 文本行，无需区分调用路径。画布滤镜的颜色效果使用画布色板；颜色遮蔽维持
+    /// 原有配色。
+    pub fn apply(&self, lines: &[String]) -> Vec<String> {
+        if lines.is_empty() {
+            return lines.to_vec();
+        }
+        match self {
+            // 几何变换（画布滤镜）
+            Self::Crop => crop_text(lines),
+            Self::Flip => flip_text(lines),
+            Self::Flop => flop_text(lines),
+            Self::Rotate180 => rotate180_text(lines),
+            Self::RotateLeft => rotate_left_text(lines),
+            Self::RotateRight => rotate_right_text(lines),
+            Self::Border => border_text(lines),
+            // 画布滤镜颜色效果（使用画布色板）
+            Self::Rainbow => canvas_rainbow_text(lines),
+            Self::Metal => canvas_metal_text(lines),
+            // 颜色遮蔽
+            Self::None => lines.to_vec(),
+            Self::RainbowLine => ColorFilter::RainbowLine.apply(lines),
+            Self::Fire => ColorFilter::Fire.apply(lines),
+            Self::Water => ColorFilter::Water.apply(lines),
+            Self::Random => ColorFilter::Random.apply(lines),
+            Self::Foreground(c) => ColorFilter::Foreground(*c).apply(lines),
+            Self::Gradient { start, end } => ColorFilter::Gradient { start: *start, end: *end }.apply(lines),
+        }
+    }
+
+    /// 转换为 [ColorFilter]。画布滤镜中仅颜色效果（Rainbow/Metal）有等效映射，
+    /// 纯几何变换（Crop/Flip 等）返回 `None`。
+    pub fn to_color_filter(self) -> Option<ColorFilter> {
+        match self {
+            Self::Rainbow => Some(ColorFilter::Rainbow),
+            Self::Metal => Some(ColorFilter::Metal),
+            Self::Crop | Self::Flip | Self::Flop | Self::Rotate180
+            | Self::RotateLeft | Self::RotateRight | Self::Border => None,
+            Self::None => Some(ColorFilter::None),
+            Self::RainbowLine => Some(ColorFilter::RainbowLine),
+            Self::Fire => Some(ColorFilter::Fire),
+            Self::Water => Some(ColorFilter::Water),
+            Self::Random => Some(ColorFilter::Random),
+            Self::Foreground(c) => Some(ColorFilter::Foreground(c)),
+            Self::Gradient { start, end } => Some(ColorFilter::Gradient { start, end }),
+        }
+    }
+
+    /// 转换为 [CanvasFilter]。颜色遮蔽变体返回 `None`。
+    pub fn to_canvas_filter(self) -> Option<CanvasFilter> {
+        match self {
+            Self::Crop => Some(CanvasFilter::Crop),
+            Self::Rainbow => Some(CanvasFilter::Rainbow),
+            Self::Metal => Some(CanvasFilter::Metal),
+            Self::Flip => Some(CanvasFilter::Flip),
+            Self::Flop => Some(CanvasFilter::Flop),
+            Self::Rotate180 => Some(CanvasFilter::Rotate180),
+            Self::RotateLeft => Some(CanvasFilter::RotateLeft),
+            Self::RotateRight => Some(CanvasFilter::RotateRight),
+            Self::Border => Some(CanvasFilter::Border),
+            Self::None | Self::RainbowLine | Self::Fire | Self::Water | Self::Random
+            | Self::Foreground(_) | Self::Gradient { .. } => None,
+        }
+    }
+
+    /// 返回所有可用名称及其类别，画布滤镜在前。
+    pub fn available() -> Vec<(&'static str, &'static str, &'static str)> {
+        vec![
+            ("crop", "crop", "画布滤镜"),
+            ("rainbow", "rainbow", "画布滤镜"),
+            ("metal", "metal", "画布滤镜"),
+            ("flip", "flip", "画布滤镜"),
+            ("flop", "flop", "画布滤镜"),
+            ("180", "180", "画布滤镜"),
+            ("left", "left", "画布滤镜"),
+            ("right", "right", "画布滤镜"),
+            ("border", "border", "画布滤镜"),
+            ("none", "none", "颜色遮蔽"),
+            ("rainbowline", "rainbowline", "颜色遮蔽"),
+            ("fire", "fire", "颜色遮蔽"),
+            ("water", "water", "颜色遮蔽"),
+            ("random", "random", "颜色遮蔽"),
+            ("red", "red", "颜色遮蔽"),
+            ("green", "green", "颜色遮蔽"),
+            ("yellow", "yellow", "颜色遮蔽"),
+            ("blue", "blue", "颜色遮蔽"),
+            ("magenta", "magenta", "颜色遮蔽"),
+            ("cyan", "cyan", "颜色遮蔽"),
+            ("white", "white", "颜色遮蔽"),
+            ("black", "black", "颜色遮蔽"),
+        ]
+    }
+}
+
+// ---- 文本级几何变换（ColorMap 内部使用）----
+
+/// 裁切文本行中的空白区域（四周）
+fn crop_text(lines: &[String]) -> Vec<String> {
+    let h = lines.len();
+    let max_w = lines.iter().map(|l| l.chars().count()).max().unwrap_or(0);
+    if max_w == 0 {
+        return vec![];
+    }
+
+    let mut xmin = max_w;
+    let mut xmax = 0usize;
+    let mut ymin = h;
+    let mut ymax = 0usize;
+
+    for (y, line) in lines.iter().enumerate() {
+        for (x, ch) in line.chars().enumerate() {
+            if ch != ' ' {
+                xmin = xmin.min(x);
+                xmax = xmax.max(x);
+                ymin = ymin.min(y);
+                ymax = ymax.max(y);
+            }
+        }
+    }
+
+    if xmax < xmin || ymax < ymin {
+        return vec![];
+    }
+
+    lines[ymin..=ymax]
+        .iter()
+        .map(|line| {
+            let chars: Vec<char> = line.chars().collect();
+            let end = (xmax + 1).min(chars.len());
+            if xmin >= chars.len() {
+                String::new()
+            } else {
+                chars[xmin..end].iter().collect()
+            }
+        })
+        .collect()
+}
+
+/// 水平翻转
+fn flip_text(lines: &[String]) -> Vec<String> {
+    lines.iter().map(|l| l.chars().rev().collect()).collect()
+}
+
+/// 垂直翻转
+fn flop_text(lines: &[String]) -> Vec<String> {
+    lines.iter().rev().cloned().collect()
+}
+
+/// 旋转 180 度
+fn rotate180_text(lines: &[String]) -> Vec<String> {
+    lines
+        .iter()
+        .rev()
+        .map(|l| l.chars().rev().collect())
+        .collect()
+}
+
+/// 逆时针旋转 90 度
+fn rotate_left_text(lines: &[String]) -> Vec<String> {
+    let h = lines.len();
+    let max_w = lines.iter().map(|l| l.chars().count()).max().unwrap_or(0);
+    if max_w == 0 || h == 0 {
+        return vec![];
+    }
+    let padded: Vec<Vec<char>> = lines
+        .iter()
+        .map(|l| {
+            let mut chars: Vec<char> = l.chars().collect();
+            chars.resize(max_w, ' ');
+            chars
+        })
+        .collect();
+    (0..max_w)
+        .map(|i| (0..h).rev().map(|j| padded[j][i]).collect())
+        .collect()
+}
+
+/// 顺时针旋转 90 度
+fn rotate_right_text(lines: &[String]) -> Vec<String> {
+    let h = lines.len();
+    let max_w = lines.iter().map(|l| l.chars().count()).max().unwrap_or(0);
+    if max_w == 0 || h == 0 {
+        return vec![];
+    }
+    let padded: Vec<Vec<char>> = lines
+        .iter()
+        .map(|l| {
+            let mut chars: Vec<char> = l.chars().collect();
+            chars.resize(max_w, ' ');
+            chars
+        })
+        .collect();
+    (0..max_w)
+        .rev()
+        .map(|i| (0..h).map(|j| padded[j][i]).collect())
+        .collect()
+}
+
+/// 添加方框边框
+fn border_text(lines: &[String]) -> Vec<String> {
+    if lines.is_empty() {
+        return vec![String::new(); 0];
+    }
+    let max_w = lines.iter().map(|l| l.chars().count()).max().unwrap_or(0);
+    let mut result = Vec::with_capacity(lines.len() + 2);
+
+    let top: String = std::iter::once('┌')
+        .chain(std::iter::repeat('─').take(max_w))
+        .chain(std::iter::once('┐'))
+        .collect();
+    result.push(top);
+
+    for line in lines {
+        let pad = max_w.saturating_sub(line.chars().count());
+        result.push(format!("│{}{}│", line, " ".repeat(pad)));
+    }
+
+    let bottom: String = std::iter::once('└')
+        .chain(std::iter::repeat('─').take(max_w))
+        .chain(std::iter::once('┘'))
+        .collect();
+    result.push(bottom);
+
+    result
+}
+
+/// 画布彩虹色（使用 canvas_color 色板）
+fn canvas_rainbow_text(lines: &[String]) -> Vec<String> {
+    use canvas_color::*;
+    let palette = [LIGHTMAGENTA, LIGHTRED, YELLOW, LIGHTGREEN, LIGHTCYAN, LIGHTBLUE];
+    lines
+        .iter()
+        .enumerate()
+        .map(|(y, line)| {
+            let mut result = String::new();
+            for (x, ch) in line.chars().enumerate() {
+                if ch != ' ' {
+                    let idx = ((x / 2 + y) % 6) as usize;
+                    result.push_str(&format!("\x1b[{}m{}\x1b[0m", palette[idx] as u8, ch));
+                } else {
+                    result.push(ch);
+                }
+            }
+            result
+        })
+        .collect()
+}
+
+/// 画布金属色（使用 canvas_color 色板）
+fn canvas_metal_text(lines: &[String]) -> Vec<String> {
+    use canvas_color::*;
+    let palette = [LIGHTBLUE, BLUE, LIGHTGRAY, DARKGRAY];
+    lines
+        .iter()
+        .enumerate()
+        .map(|(y, line)| {
+            let mut result = String::new();
+            for (x, ch) in line.chars().enumerate() {
+                if ch != ' ' {
+                    let idx = (((y + x / 8) / 2) % 4) as usize;
+                    result.push_str(&format!("\x1b[{}m{}\x1b[0m", palette[idx] as u8, ch));
+                } else {
+                    result.push(ch);
+                }
+            }
+            result
+        })
+        .collect()
 }

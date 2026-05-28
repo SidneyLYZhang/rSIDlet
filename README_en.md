@@ -2,321 +2,161 @@
 
 [中文](README.md) | English
 
-A Rust implementation of `figlet` with Chinese character support. Chinese rendering is achieved through both bitmap fonts (HZK) and vector fonts (TTF/OTF).
-
-This project provides both a CLI tool (`sidlet`) and a Rust library for integration into other projects.
+A Rust implementation of `figlet` with Chinese character support (HZK bitmap fonts / TTF/OTF vector fonts). Provides the `sidlet` CLI tool and a Rust library.
 
 ## Installation
 
 ### Method 1: Install Script (Recommended)
 
-Run the install script directly from GitHub to automatically download the latest pre-built binary and complete the installation. The script handles font files, PATH configuration, and other setup tasks automatically.
+Download the latest pre-built binary directly from GitHub. The script handles font files and `PATH` configuration automatically.
 
 #### Windows (PowerShell)
-
-Run the following command in PowerShell:
 
 ```powershell
 iwr -Uri "https://raw.githubusercontent.com/SidneyLYZhang/rSIDlet/main/install.ps1" -OutFile "$env:TEMP\install.ps1"; & "$env:TEMP\install.ps1"
 ```
 
-The install script will automatically:
-- Download the latest release for your platform
-- Install `sidlet.exe` to `%LOCALAPPDATA%\Programs\rsidlet\`
-- Copy font files to the installation directory
-- Add the installation directory to your user `PATH` environment variable
+Installs to `%LOCALAPPDATA%\Programs\rsidlet\` and adds to user `PATH`. Restart your terminal if the command is not available immediately.
 
-> **Tip**: If the command is not available immediately after installation, restart your terminal.
-
-#### Linux / macOS (bash)
-
-Run the following command in your terminal:
+#### Linux / macOS
 
 ```bash
 curl -fsSL https://raw.githubusercontent.com/SidneyLYZhang/rSIDlet/main/install.sh | bash
 ```
 
-The install script will automatically:
-- Detect your operating system and architecture
-- Download the corresponding latest release
-- Install `sidlet` to `~/.local/bin/`
-- Copy font files to the installation directory
+Installs to `~/.local/bin/`. The script will warn you if the directory is not on `PATH`. Custom install path:
 
-> **Note**: If `~/.local/bin` is not on your `PATH`, the script will prompt you to add it. You can also specify a custom install directory via an environment variable:
-> ```bash
-> RSIDLET_INSTALL_DIR=/your/custom/path bash install.sh
-> ```
+```bash
+RSIDLET_INSTALL_DIR=/your/path bash install.sh
+```
 
 #### Installing a Specific Version
 
-To install a specific version, pass the version tag as a parameter:
-
 ```bash
 # Linux / macOS
-curl -fsSL https://raw.githubusercontent.com/SidneyLYZhang/rSIDlet/main/install.sh | bash -s v1.1.0
+curl -fsSL https://raw.githubusercontent.com/SidneyLYZhang/rSIDlet/main/install.sh | bash -s v1.1.5
 
 # Windows PowerShell
-$ver="v1.1.0"; iwr -Uri "https://raw.githubusercontent.com/SidneyLYZhang/rSIDlet/main/install.ps1" -OutFile "$env:TEMP\install.ps1"; & "$env:TEMP\install.ps1" -Version $ver
+$ver="v1.1.5"; iwr -Uri "https://raw.githubusercontent.com/SidneyLYZhang/rSIDlet/main/install.ps1" -OutFile "$env:TEMP\install.ps1"; & "$env:TEMP\install.ps1" -Version $ver
 ```
 
-### Method 2: Build from Source
+### Method 2: Cargo Install
 
-If pre-built binaries are not available for your platform, or if you need the latest development version, you can build from source.
-
-#### Prerequisites
-
-- [Rust toolchain](https://rustup.rs/) (stable channel)
-- [Git](https://git-scm.com/)
-
-#### Steps
-
-**1. Clone the Repository**
+For users with Rust already installed. Cargo does not install font files automatically — run `sidlet --test` after installation to repair.
 
 ```bash
-git clone https://github.com/SidneyLYZhang/rSIDlet.git
-cd rSIDlet
+cargo install rsidlet
+sidlet --test
 ```
 
-**2. Build and Install**
+### Method 3: Build from Source
+
+For platforms without pre-built binaries, or if you need the latest development version.
+
+**Prerequisites**: [Rust toolchain](https://rustup.rs/) (stable), [Git](https://git-scm.com/).
 
 ```bash
-# Build the release version
-cargo build --release
-
-# Install to system
-make install
-```
-
-`make install` will automatically, depending on your operating system:
-- Copy the compiled binary to the installation directory
-- Copy the `fonts/` folder
-
-> **Manual Installation**: If you do not use `make install`, you need to manually copy `target/release/sidlet` (`target\release\sidlet.exe` on Windows) to a directory on your `PATH`, and ensure the `fonts/` folder is located in the same directory as the executable or its parent directory.
-
-**3. Fonts Folder Notes**
-
-The fonts folder (`fonts/`) contains the following required files:
-
-| File | Description |
-|------|-------------|
-| `standard.flf` | Default FIGlet font |
-| `big.flf` | Large FIGlet font |
-| `phm-shinonome.flf` | PHM shinonome font |
-| `future.tlf` | TOIlet future font |
-| `HZK12` / `HZK14` / `HZK16` | Bitmap Chinese fonts |
-
-At runtime, the program searches for fonts in the following priority order:
-1. `fonts/` directory at the same level as or one level above the executable
-2. User extended font directory (see [Font Search Paths](docs/SIDlet-manpage-en.md))
-3. System-level figlet directories (`/usr/share/figlet`, etc.)
-
-If you move the executable to a different location, make sure the `fonts/` folder is present in the same directory, or run `sidlet --test` to automatically repair the font configuration.
-
-#### OS-Specific Build Instructions
-
-<details>
-<summary><b>Linux</b></summary>
-
-```bash
-# Install Rust toolchain
-curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs | sh
-source ~/.cargo/env
-
-# Install build dependencies (Ubuntu/Debian example)
-sudo apt install build-essential pkg-config
-
-# Clone and build
-git clone https://github.com/SidneyLYZhang/rSIDlet.git
-cd rSIDlet
-cargo build --release
-make install
-```
-</details>
-
-<details>
-<summary><b>macOS</b></summary>
-
-```bash
-# Install Xcode Command Line Tools (if not already installed)
-xcode-select --install
-
-# Install Rust toolchain
-curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs | sh
-source ~/.cargo/env
-
-# Clone and build
-git clone https://github.com/SidneyLYZhang/rSIDlet.git
-cd rSIDlet
-cargo build --release
-make install
-```
-</details>
-
-<details>
-<summary><b>Windows</b></summary>
-
-```powershell
-# Install Rust toolchain (download rustup-init.exe from https://rustup.rs/)
-
 # Clone the repository
 git clone https://github.com/SidneyLYZhang/rSIDlet.git
 cd rSIDlet
 
-# Build
+# Build the release version
 cargo build --release
-
-# Install
-make install
 ```
 
-> On Windows, you can also install via Cargo and then repair fonts with `sidlet --test`:
-> ```powershell
-> cargo install rsidlet
-> sidlet --test
-> ```
-</details>
+After building, complete the installation:
 
-### Verifying the Installation
+**1. Copy the binary to a directory on your `PATH`:**
 
-After installation, run the following command to verify the installation was successful:
+| OS | Command |
+|-----|---------|
+| Linux / macOS | `cp target/release/sidlet ~/.local/bin/` |
+| Windows (PowerShell) | `copy target\release\sidlet.exe %LOCALAPPDATA%\Programs\rsidlet\` |
 
-```bash
-sidlet --version
-```
+**2. Copy the `fonts/` directory next to the binary:** The program looks for fonts in the `fonts/` directory alongside the executable — the fonts directory must be copied there.
 
-If installed correctly, this will output the current version number.
+| OS | Command |
+|-----|---------|
+| Linux / macOS | `cp -r fonts ~/.local/bin/` |
+| Windows (PowerShell) | `xcopy fonts %LOCALAPPDATA%\Programs\rsidlet\fonts\ /E /I` |
 
-Run the self-check command to ensure all font files are intact:
+> **Tip**: `make package` bundles the compiled binary and fonts into a distributable archive.
 
-```bash
-sidlet --test
-```
-
-If everything is in order, you will see `It's ready` displayed in rainbow colors.
-
-Test the rendering functionality:
+### Verifying Installation
 
 ```bash
-# English rendering
-sidlet "Hello World"
-
-# Chinese rendering
-sidlet "你好世界"
-```
-
-### Library
-
-To use in a Rust project, add `rsidlet` as a dependency:
-
-```bash
-cargo add rsidlet
+sidlet --version            # Print version number
+sidlet --test               # Check font integrity, prints rainbow "It's ready"
+sidlet "Hello World"        # English rendering test
+sidlet "你好世界"            # Chinese rendering test
 ```
 
 ## CLI Usage
 
-### Basic Usage
+### Basic Rendering
 
 ```bash
-# Render English text with the default font (standard)
-sidlet "Hello World"
-
-# Use a specific figlet/toilet font
-sidlet -f big.flf "Hello"
-
-# Render Chinese text (auto-detected, uses bitmap or vector fonts)
-sidlet "你好世界"
-
-# Render Chinese with a system vector font
-sidlet -f simhei.ttf -s 16 "你好世界"
-
-# Limit output width with automatic line wrapping
-sidlet -w 40 "This is a long text"
+sidlet "Hello World"                  # Default font (standard)
+sidlet -f big.flf "Hello"             # Specific FIGlet/TOIlet font
+sidlet "你好世界"                      # Auto-switches to Chinese render mode
+sidlet -f simhei.ttf -s 16 "你好世界"  # System vector font
+sidlet -w 40 "Long text auto-wrapped" # Limit output width
 ```
 
 ### Color Filters
 
 ```bash
-# Rainbow (per-character gradient)
-sidlet -m rainbow "Rainbow Text"
-
-# Fire effect
-sidlet -m fire "Fire Text"
-
-# Metal effect
-sidlet -m metal "Metal Text"
-
-# Solid colors (red/green/yellow/blue/magenta/cyan/white/black)
-sidlet -m red "Red Text"
+sidlet -m rainbow "Rainbow"   # Per-character gradient
+sidlet -m fire "Fire"         # Fire gradient
+sidlet -m metal "Metal"       # Metallic gradient
+sidlet -m red "Red"           # Solid color
 ```
 
-Available color filters: `none`, `rainbow`, `rainbowline`, `metal`, `fire`, `water`, `random`, plus `red`, `green`, `yellow`, `blue`, `magenta`, `cyan`, `white`, `black`.
+Supports `none`, `rainbow`, `rainbowline`, `metal`, `fire`, `water`, `random`, plus 8 solid colors. See the [SIDlet manpage](docs/SIDlet-manpage-en.md) for details.
 
-### Custom Foreground/Background Characters
+### Custom Foreground / Background
 
 ```bash
-# Use custom characters for foreground and background
 sidlet --fore "#" --back "." "Hello"
-
-# Works with Chinese rendering too
 sidlet --fore "■" "你好"
 ```
 
 ### Font Management
 
 ```bash
-# Install figlet/toilet fonts from online repositories
-sidlet --install standard.flf
-sidlet --install big.flf
-
-# Install from a local file
-sidlet --install myfont.flf -d /path/to/fonts
-
-# Show font info
-sidlet --info big.flf
-sidlet -i
-
-# List installed fonts
-sidlet --list installed
-
-# List fonts available for download
-sidlet --list letters
-
-# List system vector fonts (TTF/OTF)
-sidlet --list font
-
-# List available color filters
-sidlet --list colormap
-
-# Check installation status and optionally repair
-sidlet --test
+sidlet --install big.flf             # Install font from online repository
+sidlet --install myfont.flf -d /path # Install from local file
+sidlet --info big.flf                # Show font info
+sidlet --list installed              # List installed fonts
+sidlet --list letters                # List fonts available for download
+sidlet --list font                   # List system vector fonts
+sidlet --list colormap               # List available color filters
 ```
 
 ### Advanced Options
 
 ```bash
-# Use a figlet control file
-sidlet -C mycontrol.flc -f standard.flf "Hello"
-
-# Specify an additional font search directory
-sidlet -d /path/to/custom/fonts -f myfont.flf "Hello"
-
-# Set bitmap font size (12/14/16)
-sidlet -s 16 "你好世界"
+sidlet -C mycontrol.flc -f standard.flf "Hello"   # FIGlet Control file
+sidlet -d /custom/fonts -f myfont.flf "Hello"     # Extra font search directory
+sidlet -s 14 "你好世界"                             # Bitmap font size (12/14/16)
 ```
 
+Full options reference: [SIDlet manpage](docs/SIDlet-manpage-en.md).
+
 ## Library Usage
+
+```bash
+cargo add rsidlet
+```
 
 ### Basic Rendering
 
 ```rust
 use rsidlet::figfont;
 
-// Load and render a figlet/toilet font
 let data = figfont::load_font_data("standard.flf")?;
 let lines = data.render("Hello World");
-for line in &lines {
-    println!("{}", line);
-}
+for line in &lines { println!("{}", line); }
 ```
 
 ### Chinese Rendering
@@ -324,40 +164,30 @@ for line in &lines {
 ```rust
 use rsidlet::chilet;
 
-// Render Chinese text using HZK bitmap fonts
+// HZK bitmap fonts
 if let Some(path) = chilet::find_hzk("HZK16") {
     let lines = chilet::render_hzk("你好", &path)?;
     for line in &lines { println!("{}", line); }
 }
 
-// Render using a system vector font
+// System vector font
 let lines = chilet::render_vector_font("你好", "SimHei", 32.0)?;
 for line in &lines { println!("{}", line); }
 
-// Render using a specific vector font file path
+// Specific font file
 let lines = chilet::render_with_font_file("你好", &font_path, 24.0)?;
 for line in &lines { println!("{}", line); }
 ```
 
-### Color Filters
+### Color Filters & Concatenation
 
 ```rust
 use rsidlet::utils;
 
 let filter = utils::parse_filter("rainbow").unwrap();
-let lines = vec!["Hello".to_string()];
 utils::print_colored(&lines, filter);
-```
-
-### Horizontal Concatenation
-
-```rust
-use rsidlet::utils;
 
 let combined = utils::hcat(&left_lines, &right_lines, 4);
-for line in &combined {
-    println!("{}", line);
-}
 ```
 
 ## Fonts
@@ -369,10 +199,20 @@ for line in &combined {
 | `standard.flf` | FIGlet | Standard font (default) |
 | `big.flf` | FIGlet | Large font |
 | `phm-shinonome.flf` | FIGlet | PHM shinonome font |
-| `future.tlf` | TOIlet | Future font |
-| `HZK12` | BitmapFont | 12x12 bitmap Chinese font |
-| `HZK14` | BitmapFont | 14x14 bitmap Chinese font |
-| `HZK16` | BitmapFont | 16x16 bitmap Chinese font |
+| `future.tlf` | TOIlet | future font |
+| `HZK12` | Bitmap | 12×12 Chinese font |
+| `HZK14` | Bitmap | 14×14 Chinese font |
+| `HZK16` | Bitmap | 16×16 Chinese font |
+
+### Font Search Paths
+
+The program searches for fonts in this priority order (see [paths.rs](src/paths.rs)):
+
+1. `fonts/` alongside the executable
+2. `fonts/` one level above the executable
+3. Extended font directory (user-writable, `--install` target)
+4. System-level figlet directories (`/usr/share/figlet`, etc.)
+5. Extra directories specified via `-d`
 
 ### Installing More Fonts Online
 
@@ -380,13 +220,18 @@ for line in &combined {
 sidlet --install [font_name]
 ```
 
-Fonts are downloaded from the following GitHub repositories: [xero/figlet-fonts](https://github.com/xero/figlet-fonts) and [PhMajerus/FIGfonts](https://github.com/PhMajerus/FIGfonts).
+Fonts sourced from [xero/figlet-fonts](https://github.com/xero/figlet-fonts) and [PhMajerus/FIGfonts](https://github.com/PhMajerus/FIGfonts).
 
 ### Chinese Fonts
 
-In addition to the built-in HZK bitmap fonts, you can also use system-installed vector fonts (TTF/OTF) for rendering. Results vary by font. On Windows, using `SimHei` at font size 12 produces good results.
+In addition to built-in HZK bitmap fonts, system vector fonts (TTF/OTF) are supported. On Windows, `SimHei` at font size 12 produces good results.
 
-## Thanks
+## Documentation
+
+- [SIDlet manpage (full CLI reference)](docs/SIDlet-manpage-en.md)
+- [Changelog](CHANGELOG.md)
+
+## Credits
 
 - [FIGlet](http://www.figlet.org/) — The original ASCII art text project
 - [TOIlet](https://github.com/cacalabs/toilet) — Enhanced FIGlet with color filter support

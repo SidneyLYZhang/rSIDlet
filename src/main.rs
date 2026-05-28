@@ -143,16 +143,23 @@ fn draw(message: &str, cli: &Cli) -> io::Result<()> {
         render_figlet(message, font_name, &dirs, cli)?
     };
 
-    // 应用色彩滤镜
+    // 应用颜色蒙版
     if let Some(ref color) = cli.mask_color {
-        if let Some(filter) = utils::parse_filter(color) {
-            utils::print_colored(&lines, filter);
-        } else {
-            eprintln!("警告: 未知的颜色遮蔽 '{}'", color);
-            utils::print_colored(&lines, utils::ColorFilter::None);
+        match utils::ColorMap::parse(color) {
+            Some(colormap) => {
+                let colored = colormap.apply(&lines);
+                utils::print_lines(&colored);
+            }
+            None => {
+                eprintln!(
+                    "警告: 未知的颜色蒙版 '{}'。使用 --list colormap 查看可用选项。",
+                    color
+                );
+                utils::print_lines(&lines);
+            }
         }
     } else {
-        utils::print_colored(&lines, utils::ColorFilter::None);
+        utils::print_lines(&lines);
     }
 
     Ok(())

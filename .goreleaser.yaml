@@ -24,8 +24,6 @@ builds:
     binary: sidlet
     flags:
       - --release
-    env:
-      - RING_PREGENERATE_ASM=1
     targets:
       - x86_64-unknown-linux-gnu
       - x86_64-unknown-linux-musl
@@ -36,7 +34,7 @@ builds:
 archives:
   - formats: [tar.gz]
     # this name template makes the OS and Arch compatible with the results of `uname`.
-    name_template: "{{ .ProjectName }}_{{ .Version }}_{{ .Os }}_{{ .Arch }}"
+    name_template: "{{ .ProjectName }}_{{ .Version }}_{{ .Target }}"
     # use zip for windows archives
     format_overrides:
       - goos: windows

@@ -46,13 +46,36 @@ fn list_system_fonts(_extra_dir: Option<&std::path::Path>) -> io::Result<()> {
     Ok(())
 }
 
-/// 列出可用的颜色遮蔽名称
+/// 列出可用的颜色蒙版名称（统一画布滤镜与颜色遮蔽）
 fn list_colormaps() -> io::Result<()> {
-    let filters = utils::available_filters();
-    println!("可用的颜色遮蔽：");
-    for (i, f) in filters.iter().enumerate() {
-        println!("  {}. {}", i + 1, f);
+    let maps = utils::ColorMap::available();
+
+    let canvas_filters: Vec<_> = maps.iter().filter(|(_, _, cat)| *cat == "画布滤镜").collect();
+    let color_masks: Vec<_> = maps.iter().filter(|(_, _, cat)| *cat == "颜色遮蔽").collect();
+
+    println!("可用的颜色蒙版（画布滤镜 + 颜色遮蔽）：\n");
+
+    if !canvas_filters.is_empty() {
+        println!("【画布滤镜】（名称冲突时优先级更高）");
+        for (i, (name, _, _)) in canvas_filters.iter().enumerate() {
+            println!("  {}. {}", i + 1, name);
+        }
+        println!();
     }
+
+    if !color_masks.is_empty() {
+        println!("【颜色遮蔽】");
+        for (i, (name, _, _)) in color_masks.iter().enumerate() {
+            println!("  {}. {}", i + 1, name);
+        }
+    }
+
+    println!(
+        "\n共 {} 个可用选项（{} 个画布滤镜 + {} 个颜色遮蔽）",
+        maps.len(),
+        canvas_filters.len(),
+        color_masks.len()
+    );
     Ok(())
 }
 
