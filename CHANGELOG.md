@@ -22,6 +22,21 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - `--test` 命令增强：在检查字体目录存在性的基础上，新增基础字体文件（big.flf、future.tlf、standard.flf、phm-shinonome.flf、HZK12/14/16）完整性校验
 - 文档版本号更新为 `v1.1.0+`
 
+## [1.1.2] - 2026-05-28
+
+### Added
+
+- 支持从标准输入（stdin）管道读取文本消息，允许通过管道输入文本（如 `echo "Hello" | sidlet`）
+
+### Changed
+
+- CI 工作流（`ci.yml`）优化：push 事件触发限制为 `main` 分支且仅当 `src/**` 路径变更时触发
+- GoReleaser 配置（`.goreleaser.yaml`）添加显式 `binary: sidlet` 字段
+
+### Removed
+
+- Release 工作流（`release.yml`）移除独立的 Arch Linux 原生构建 job，统一由 GoReleaser 管理跨平台构建
+
 ## [1.0.6] - 2026-05-22
 
 ### Changed

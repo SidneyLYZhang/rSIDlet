@@ -1,15 +1,21 @@
 use std::io;
 use std::path::{Path, PathBuf};
 
-/// 获取内置字体目录（编译后可执行文件同级的 ../fonts）
+/// 获取内置字体目录
 ///
 /// 按优先级依次尝试：
-/// 1. exe/../fonts（编译后安装场景）
-/// 2. cwd/../fonts（开发场景）
-/// 3. cwd/fonts（直接子目录）
+/// 1. exe同级的 fonts/（二进制与 fonts 安装在同一目录的场景）
+/// 2. exe/../fonts（fonts 在二进制上级目录的场景）
+/// 3. cwd/../fonts（开发场景）
+/// 4. cwd/fonts（开发场景）
 pub fn builtin_font_dir() -> Option<PathBuf> {
-    // 编译后场景：可执行文件同级
     if let Ok(exe) = std::env::current_exe() {
+        if let Some(parent) = exe.parent() {
+            let path = parent.join("fonts");
+            if path.exists() {
+                return Some(path);
+            }
+        }
         if let Some(parent) = exe.parent() {
             let path = parent.join("..").join("fonts");
             if path.exists() {
@@ -18,7 +24,6 @@ pub fn builtin_font_dir() -> Option<PathBuf> {
         }
     }
 
-    // 开发时回退
     if let Ok(cwd) = std::env::current_dir() {
         let cwd_parent = cwd.join("..").join("fonts");
         if cwd_parent.exists() {

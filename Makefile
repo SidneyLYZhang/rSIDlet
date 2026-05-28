@@ -132,7 +132,7 @@ package: build
 ifeq ($(PKG_EXT),zip)
 	powershell -Command "Compress-Archive -Path 'target/release/$(BINARY)$(BIN_EXT)', 'fonts' -DestinationPath '$(NAME)-$(VERSION)-local.zip' -Force"
 else
-	tar -cJf "$(NAME)-$(VERSION)-local.tar.xz" "target/release/$(BINARY)" fonts/
+	tar -cJf "$(NAME)-$(VERSION)-local.tar.xz" -C target/release "$(BINARY)" -C ../.. fonts/
 endif
 	@echo "Created: $(NAME)-$(VERSION)-local.$(PKG_EXT)"
 
