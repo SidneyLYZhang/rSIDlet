@@ -5,6 +5,41 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [1.1.3] - 2026-05-28
+
+### Added
+
+- 画布滤镜系统（Canvas Filter System）：新增 `Canvas` trait（抽象画布像素读写与几何变换操作）、`CanvasFilter` 枚举（Crop / Rainbow / Metal / Flip / Flop / Rotate180 / RotateLeft / RotateRight / Border 共 9 种滤镜）、`FilterContext` 滤镜管线上下文（支持 `:` 分隔的多滤镜链式组合与动画行计数器）
+- `canvas_color` 子模块：映射 libcaca 颜色常量到 ANSI 颜色，提供 `LIGHTBLUE`、`LIGHTGRAY`、`LIGHTMAGENTA` 等 9 种颜色常量
+- 滤镜解析：`CanvasFilter::parse()` 支持从字符串名称解析滤镜，`"rotate"` 可作为 `"180"` 的别名以保持向后兼容
+- 滤镜实现：`apply_crop()` 裁切空白区域、`apply_rainbow()` 彩虹色渐变、`apply_metal()` 金属色效果、`apply_border()` Unicode 方框字符边框
+
+### Changed
+
+- 内置字体目录查找逻辑增强：新增二进制文件同级 `fonts/` 目录（`exe/fonts/`）作为最高优先级查找路径，共支持 4 级路径回退
+- GoReleaser 配置：Windows 构建目标从 `x86_64-pc-windows-msvc` 改为 `x86_64-pc-windows-gnu`，添加 `RING_PREGENERATE_ASM=1` 环境变量
+- CI 工作流（`ci.yml`）：push 事件触发限制为 `main` 分支且仅当 `src/**` 路径变更时触发
+- 标准输入读取逻辑增强：使用 `IsTerminal` 检测管道/重定向输入，非 TTY 时自动从 stdin 读取全部内容
+
+### Fixed
+
+- Makefile `package` 目标修复 tar 归档路径，使用 `-C` 切换目录确保内部路径结构正确
+
+## [1.1.2] - 2026-05-28
+
+### Added
+
+- 支持从标准输入（stdin）管道读取文本消息，允许通过管道输入文本（如 `echo "Hello" | sidlet`）
+
+### Changed
+
+- CI 工作流（`ci.yml`）优化：push 事件触发限制为 `main` 分支且仅当 `src/**` 路径变更时触发
+- GoReleaser 配置（`.goreleaser.yaml`）添加显式 `binary: sidlet` 字段
+
+### Removed
+
+- Release 工作流（`release.yml`）移除独立的 Arch Linux 原生构建 job，统一由 GoReleaser 管理跨平台构建
+
 ## [1.1.0] - 2026-05-27
 
 ### Added
@@ -21,21 +56,6 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - CI Release 工作流重构：改用 GoReleaser 统一管理跨平台构建、打包和 GitHub Release 发布
 - `--test` 命令增强：在检查字体目录存在性的基础上，新增基础字体文件（big.flf、future.tlf、standard.flf、phm-shinonome.flf、HZK12/14/16）完整性校验
 - 文档版本号更新为 `v1.1.0+`
-
-## [1.1.2] - 2026-05-28
-
-### Added
-
-- 支持从标准输入（stdin）管道读取文本消息，允许通过管道输入文本（如 `echo "Hello" | sidlet`）
-
-### Changed
-
-- CI 工作流（`ci.yml`）优化：push 事件触发限制为 `main` 分支且仅当 `src/**` 路径变更时触发
-- GoReleaser 配置（`.goreleaser.yaml`）添加显式 `binary: sidlet` 字段
-
-### Removed
-
-- Release 工作流（`release.yml`）移除独立的 Arch Linux 原生构建 job，统一由 GoReleaser 管理跨平台构建
 
 ## [1.0.6] - 2026-05-22
 
