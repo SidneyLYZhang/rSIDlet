@@ -398,3 +398,334 @@ pub fn available_filters() -> Vec<&'static str> {
         "red", "green", "yellow", "blue", "magenta", "cyan", "white", "black",
     ]
 }
+
+// ============================================================
+// 画布滤镜系统（Canvas Filter System）
+// 对标 libcaca 的滤镜管线：crop / rainbow / metal / flip / flop / rotate / border
+// ============================================================
+
+/// 画布颜色常量 —— 映射 libcaca 的 CACA_* 到 [AnsiColor]
+///
+/// `TRANSPARENT` 不在 AnsiColor 中，而是通过 [Canvas::set_color] 的 `bg: Option<AnsiColor>`
+/// 参数表示：`None` = 透明（不改变背景色）。
+pub mod canvas_color {
+    use super::AnsiColor;
+
+    pub const LIGHTBLUE: AnsiColor = AnsiColor::BrightBlue;
+    pub const BLUE: AnsiColor = AnsiColor::Blue;
+    pub const LIGHTGRAY: AnsiColor = AnsiColor::BrightWhite;
+    pub const DARKGRAY: AnsiColor = AnsiColor::BrightBlack;
+    pub const LIGHTMAGENTA: AnsiColor = AnsiColor::BrightMagenta;
+    pub const LIGHTRED: AnsiColor = AnsiColor::BrightRed;
+    pub const YELLOW: AnsiColor = AnsiColor::Yellow;
+    pub const LIGHTGREEN: AnsiColor = AnsiColor::BrightGreen;
+    pub const LIGHTCYAN: AnsiColor = AnsiColor::BrightCyan;
+}
+
+/// 画布操作抽象。
+///
+/// 实现者只需提供基本的像素读写与几何变换；滤镜系统通过此 trait 与任意画布后端解耦。
+pub trait Canvas {
+    fn width(&self) -> u32;
+    fn height(&self) -> u32;
+    fn get_char(&self, x: u32, y: u32) -> char;
+    /// 设置指定单元格的前景色与背景色。`bg` 为 `None` 时表示透明（不改变背景）。
+    fn set_color(&mut self, x: u32, y: u32, fg: AnsiColor, bg: Option<AnsiColor>);
+    fn put_char(&mut self, x: u32, y: u32, ch: char);
+    fn flip(&mut self);
+    fn flop(&mut self);
+    fn rotate_180(&mut self);
+    fn rotate_left(&mut self);
+    fn rotate_right(&mut self);
+    /// 设置画布可视边界。(x, y) 可为负值以扩展画布。
+    fn set_boundaries(&mut self, x: i32, y: i32, w: u32, h: u32);
+}
+
+/// 画布滤镜。
+///
+/// 使用枚举而非 trait object 以：
+/// - 避免堆分配
+/// - 支持 `match` 穷尽检查
+/// - 实现 `Copy` / `Eq`，便于存入 `Vec` 和比较
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum CanvasFilter {
+    /// 裁切空白区域
+    Crop,
+    /// 彩虹色渐变效果
+    Rainbow,
+    /// 金属色效果
+    Metal,
+    /// 水平翻转
+    Flip,
+    /// 垂直翻转
+    Flop,
+    /// 旋转 180 度
+    Rotate180,
+    /// 旋转 90 度（逆时针）
+    RotateLeft,
+    /// 旋转 90 度（顺时针）
+    RotateRight,
+    /// 用方框字符包围内容
+    Border,
+}
+
+/// 滤镜解析/应用错误
+#[derive(Debug, Clone)]
+pub enum FilterError {
+    /// 未知滤镜名
+    UnknownFilter(String),
+    /// 画布尺寸为零
+    EmptyCanvas,
+}
+
+impl std::fmt::Display for FilterError {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        match self {
+            Self::UnknownFilter(name) => write!(f, "未知的滤镜: \"{}\"", name),
+            Self::EmptyCanvas => write!(f, "画布尺寸为零，无法应用滤镜"),
+        }
+    }
+}
+
+impl std::error::Error for FilterError {}
+
+/// 滤镜管线上下文。
+///
+/// 持有画布、已注册的滤镜序列以及用于动画效果的行计数器。
+pub struct FilterContext<C: Canvas> {
+    pub canvas: C,
+    /// 动画行号，每次调用 [apply_filters](Self::apply_filters) 后自增
+    pub lines: u32,
+    filters: Vec<CanvasFilter>,
+}
+
+impl<C: Canvas> FilterContext<C> {
+    pub fn new(canvas: C) -> Self {
+        Self { canvas, lines: 0, filters: Vec::new() }
+    }
+
+    /// 从 `':'` 分隔的字符串解析并注册滤镜。
+    ///
+    /// 支持 `"rotate"` 作为 `"180"` 的别名以保持向后兼容。
+    /// 空段（如 `"flip::flop"`）会被安全跳过。
+    pub fn add_filters(&mut self, spec: &str) -> Result<(), FilterError> {
+        for name in spec.split(':') {
+            let name = name.trim();
+            if name.is_empty() {
+                continue;
+            }
+            let filter = CanvasFilter::parse(name)?;
+            self.filters.push(filter);
+        }
+        Ok(())
+    }
+
+    /// 按顺序应用所有已注册的滤镜。
+    pub fn apply_filters(&mut self) -> Result<(), FilterError> {
+        if self.canvas.width() == 0 || self.canvas.height() == 0 {
+            return Err(FilterError::EmptyCanvas);
+        }
+        // 拷贝一份避免同时持有 &self.filters 和 &mut self
+        let filters: Vec<CanvasFilter> = self.filters.iter().copied().collect();
+        for filter in filters {
+            filter.execute(self);
+        }
+        self.lines += 1;
+        Ok(())
+    }
+}
+
+impl CanvasFilter {
+    /// 从名称解析滤镜。
+    fn parse(name: &str) -> Result<Self, FilterError> {
+        match name {
+            "crop" => Ok(Self::Crop),
+            "rainbow" => Ok(Self::Rainbow),
+            "metal" => Ok(Self::Metal),
+            "flip" => Ok(Self::Flip),
+            "flop" => Ok(Self::Flop),
+            "rotate" | "180" => Ok(Self::Rotate180), // "rotate" 向后兼容 C 版本
+            "left" => Ok(Self::RotateLeft),
+            "right" => Ok(Self::RotateRight),
+            "border" => Ok(Self::Border),
+            other => Err(FilterError::UnknownFilter(other.to_string())),
+        }
+    }
+
+    /// 滤镜对应的命令行名称。
+    pub fn name(self) -> &'static str {
+        match self {
+            Self::Crop => "crop",
+            Self::Rainbow => "rainbow",
+            Self::Metal => "metal",
+            Self::Flip => "flip",
+            Self::Flop => "flop",
+            Self::Rotate180 => "180",
+            Self::RotateLeft => "left",
+            Self::RotateRight => "right",
+            Self::Border => "border",
+        }
+    }
+
+    /// 滤镜的中文描述。
+    pub fn description(self) -> &'static str {
+        match self {
+            Self::Crop => "裁切未使用的空白区域",
+            Self::Rainbow => "添加彩虹色渐变效果",
+            Self::Metal => "添加金属色效果",
+            Self::Flip => "水平翻转",
+            Self::Flop => "垂直翻转",
+            Self::Rotate180 => "旋转 180 度",
+            Self::RotateLeft => "逆时针旋转 90 度",
+            Self::RotateRight => "顺时针旋转 90 度",
+            Self::Border => "用方框字符包围内容",
+        }
+    }
+
+    /// 所有可用滤镜及其描述。
+    pub fn available() -> Vec<(Self, &'static str)> {
+        vec![
+            (Self::Crop, Self::Crop.description()),
+            (Self::Rainbow, Self::Rainbow.description()),
+            (Self::Metal, Self::Metal.description()),
+            (Self::Flip, Self::Flip.description()),
+            (Self::Flop, Self::Flop.description()),
+            (Self::Rotate180, Self::Rotate180.description()),
+            (Self::RotateLeft, Self::RotateLeft.description()),
+            (Self::RotateRight, Self::RotateRight.description()),
+            (Self::Border, Self::Border.description()),
+        ]
+    }
+
+    /// 执行滤镜（内部方法，由 [FilterContext::apply_filters] 调用）。
+    fn execute<C: Canvas>(self, ctx: &mut FilterContext<C>) {
+        match self {
+            Self::Crop => apply_crop(ctx),
+            Self::Rainbow => apply_rainbow(ctx),
+            Self::Metal => apply_metal(ctx),
+            Self::Flip => ctx.canvas.flip(),
+            Self::Flop => ctx.canvas.flop(),
+            Self::Rotate180 => ctx.canvas.rotate_180(),
+            Self::RotateLeft => ctx.canvas.rotate_left(),
+            Self::RotateRight => ctx.canvas.rotate_right(),
+            Self::Border => apply_border(ctx),
+        }
+    }
+}
+
+// ---- 滤镜实现 ----
+
+/// 裁切画布到非空字符的包围盒。
+fn apply_crop<C: Canvas>(ctx: &mut FilterContext<C>) {
+    let w = ctx.canvas.width();
+    let h = ctx.canvas.height();
+    let mut xmin = w;
+    let mut xmax = 0u32;
+    let mut ymin = h;
+    let mut ymax = 0u32;
+
+    for y in 0..h {
+        for x in 0..w {
+            if ctx.canvas.get_char(x, y) != ' ' {
+                if x < xmin {
+                    xmin = x;
+                }
+                if x > xmax {
+                    xmax = x;
+                }
+                if y < ymin {
+                    ymin = y;
+                }
+                if y > ymax {
+                    ymax = y;
+                }
+            }
+        }
+    }
+
+    if xmax >= xmin && ymax >= ymin {
+        ctx.canvas
+            .set_boundaries(xmin as i32, ymin as i32, xmax - xmin + 1, ymax - ymin + 1);
+    }
+}
+
+/// 彩虹色：对非空字符按 `(x/2 + y + lines) % 6` 循环着色。
+fn apply_rainbow<C: Canvas>(ctx: &mut FilterContext<C>) {
+    use canvas_color::*;
+
+    let palette = [LIGHTMAGENTA, LIGHTRED, YELLOW, LIGHTGREEN, LIGHTCYAN, LIGHTBLUE];
+    let w = ctx.canvas.width();
+    let h = ctx.canvas.height();
+
+    for y in 0..h {
+        for x in 0..w {
+            let ch = ctx.canvas.get_char(x, y);
+            if ch != ' ' {
+                let idx = ((x / 2 + y + ctx.lines) % 6) as usize;
+                ctx.canvas.set_color(x, y, palette[idx], None);
+                ctx.canvas.put_char(x, y, ch);
+            }
+        }
+    }
+}
+
+/// 金属色：对非空字符按 `(lines + y + x/8) / 2 % 4` 循环着色。
+fn apply_metal<C: Canvas>(ctx: &mut FilterContext<C>) {
+    use canvas_color::*;
+
+    let palette = [LIGHTBLUE, BLUE, LIGHTGRAY, DARKGRAY];
+    let w = ctx.canvas.width();
+    let h = ctx.canvas.height();
+
+    for y in 0..h {
+        for x in 0..w {
+            let ch = ctx.canvas.get_char(x, y);
+            if ch == ' ' {
+                continue;
+            }
+            let idx = (((ctx.lines + y + x / 8) / 2) % 4) as usize;
+            ctx.canvas.set_color(x, y, palette[idx], None);
+            ctx.canvas.put_char(x, y, ch);
+        }
+    }
+}
+
+/// 边框：将画布四周各扩展 1 格，并用 Unicode 方框字符绘制边框。
+fn apply_border<C: Canvas>(ctx: &mut FilterContext<C>) {
+    let w = ctx.canvas.width() as i32;
+    let h = ctx.canvas.height() as i32;
+
+    // 扩展边界，内容自动偏移到 (1,1) 起始
+    ctx.canvas
+        .set_boundaries(-1, -1, (w + 2) as u32, (h + 2) as u32);
+
+    let new_w = ctx.canvas.width();
+    let new_h = ctx.canvas.height();
+
+    for y in 0..new_h {
+        for x in 0..new_w {
+            let ch = if y == 0 {
+                if x == 0 {
+                    '┌'
+                } else if x == new_w - 1 {
+                    '┐'
+                } else {
+                    '─'
+                }
+            } else if y == new_h - 1 {
+                if x == 0 {
+                    '└'
+                } else if x == new_w - 1 {
+                    '┘'
+                } else {
+                    '─'
+                }
+            } else if x == 0 || x == new_w - 1 {
+                '│'
+            } else {
+                continue;
+            };
+            ctx.canvas.put_char(x, y, ch);
+        }
+    }
+}
